@@ -117,3 +117,5 @@ schema 1 才提供 worker 推理计时；schema 2 的计时字段为空。模型
 ## 兼容性
 
 worker 协议保持不变。已有同步 Python/Swift 客户端继续可用。Python 使用 `NCS2FatalError` 区分 fatal 响应，Swift 的 `NCS2ClientError` 提供 `isFatalResponse`，不需要解析厂商错误文本。
+
+状态快照中的 `last_error`（Python）或 `lastError`（Swift）保留最近一次任务失败，排队取消不计入。释放任务结果不会清除该诊断。`device_owned` / `deviceOwned` 表示 SDK 调度租约；硬件锁由 native worker 持有。快照反映进程内状态，不是实时 USB 健康探测。

@@ -82,6 +82,16 @@ schema 1 支持一个静态 f32 输入和一个静态 f32 输出。schema 2 支�
 
 `Package.swift` 暴露 `NCS2Kit`，支持 macOS 13+ arm64，不携带 worker、OpenVINO、libusb 或固件二进制。
 
+在虚拟环境中安装 Python SDK：
+
+```sh
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install .
+```
+
+安装后可用 `from neuralstick_bridge import NCS2Runtime`。wheel 只包含 Python SDK，native worker 和运行时文件需单独提供。
+
 ## 目录结构
 
 - `ncs2`：命令分发和本地日志入口。

@@ -91,6 +91,7 @@ class NCS2RuntimeStatus:
     registered_model_count: int
     closed: bool
     closing: bool
+    last_error: NCS2SDKError | None
 
 
 @dataclass
@@ -259,6 +260,7 @@ class NCS2Runtime:
         self._closing = None
         self._closed = False
         self._loop = None
+        self._last_error = None
 
     def _check_loop(self):
         loop = asyncio.get_running_loop()
@@ -308,6 +310,8 @@ class NCS2Runtime:
             registered_model_count=len(self._models),
             closed=self._closed,
             closing=self._closing is not None and not self._closing.done(),
+            last_error=(NCS2SDKError(self._last_error.code, str(self._last_error))
+                        if self._last_error is not None else None),
         )
 
     async def submit(self, model: str, inputs: Sequence[Sequence[float]]) -> NCS2Task:
@@ -357,13 +361,14 @@ class NCS2Runtime:
         self._finish(record, error=NCS2SDKError(NCS2ErrorCode.TASK_CANCELLED, "Queued task cancelled"))
         return True
 
-    @staticmethod
-    def _finish(record, *, result=None, error=None):
+    def _finish(self, record, *, result=None, error=None):
         record.inputs = ()
         record.result, record.error = result, error
         record.status = (NCS2TaskStatus.CANCELLED if error and error.code == NCS2ErrorCode.TASK_CANCELLED
                          else NCS2TaskStatus.FAILED if error else NCS2TaskStatus.SUCCEEDED)
         record.completed.set_result((result, error))
+        if error is not None and error.code != NCS2ErrorCode.TASK_CANCELLED:
+            self._last_error = NCS2SDKError(error.code, str(error))
 
     def _release(self, task_id):
         record = self._record(task_id)

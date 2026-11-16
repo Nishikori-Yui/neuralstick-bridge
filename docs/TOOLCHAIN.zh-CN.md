@@ -39,7 +39,7 @@ MYRIAD 插件在 macOS 上仍使用 `libopenvino_intel_myriad_plugin.so` 文件�
 
 ## 诊断
 
-`./ncs2 doctor` 是不打开 USB 的只读预检查，会检查原生主机、命令行工具、锁定的 OpenVINO checkout、运行时库、固件输出哈希、预期构建产物和共享设备锁路径。退出码 0 表示本地工具链已准备好，退出码 2 表示仍有必需检查需要处理。
+`./ncs2 doctor` 是不打开 USB 的只读预检查，会检查原生主机、命令行工具、锁定的 OpenVINO checkout、运行时库、固件输出哈希、预期构建产物和共享设备锁路径。运行时和 libusb 检查会验证纯 arm64 slice。`--json` 的 stdout 只有一个 JSON 报告，日志提示写入 stderr。`./ncs2 doctor --hardware` 会额外打开 USB 并向 MYRIAD 查询设备，不执行推理。退出码 0 表示所选检查通过，退出码 2 表示仍有必需检查需要处理。
 
 probe、schema 1 worker、schema 2 worker 和异步 SDK 使用同一个非阻塞 advisory lock。设置 `NCS2_DEVICE_LOCK` 可以选择其他锁文件，以便协调多个进程。第二个 NeuralStick Bridge 进程会返回 `device_busy`，不会启动 MYRIAD 会话。`--validate-only` worker 检查不会获取设备锁。
 

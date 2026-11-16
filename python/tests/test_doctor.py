@@ -4,6 +4,10 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
+import os
+import subprocess
+import sys
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts/doctor.py"
@@ -44,6 +48,26 @@ class DoctorTests(unittest.TestCase):
             report = doctor.diagnose(root)
             firmware = next(item for item in report["checks"] if item["name"] == "firmware:usb/test.mvcmd")
             self.assertTrue(firmware["ok"])
+
+    def test_binary_check_rejects_universal_and_x86(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "library.dylib"
+            path.write_bytes(b"synthetic")
+            for arch, expected in [("arm64", True), ("arm64 x86_64", False), ("x86_64", False), (None, False)]:
+                with mock.patch.object(doctor, "run_capture", return_value=arch):
+                    self.assertEqual(doctor.binary_check("binary", path)["ok"], expected)
+
+    def test_json_launcher_stdout_is_one_json_report(self):
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / "doctor.md"
+            process = subprocess.run(["/bin/zsh", str(ROOT / "ncs2"), "doctor", "--json"],
+                                     capture_output=True, text=True, timeout=30,
+                                     env={**os.environ, "NCS2_LOG_FILE": str(log)})
+            self.assertIn(process.returncode, (0, 2), process.stderr)
+            report = json.loads(process.stdout)
+            self.assertFalse(report["hardware_accessed"])
+            self.assertTrue(log.is_file())
+            self.assertIn("[recorded]", process.stderr)
 
 
 if __name__ == "__main__":

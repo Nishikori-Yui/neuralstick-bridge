@@ -10,7 +10,7 @@ case "$action" in
   build-probe) exec /bin/zsh "$logger" "编译 arm64 probe" /bin/zsh "$ROOT_DIR/scripts/build_probe.sh" "$@" ;;
   build-swift) exec /bin/zsh "$logger" "编译 arm64 Swift 客户端" /bin/zsh "$ROOT_DIR/scripts/build_swift_clients.sh" "$@" ;;
   check) exec /bin/zsh "$logger" --stream "验证 arm64 依赖闭包" /bin/zsh "$ROOT_DIR/scripts/check_arm64.sh" "$@" ;;
-  doctor) exec /bin/zsh "$logger" "检查 NeuralStick Bridge 本地环境" python3 "$ROOT_DIR/scripts/doctor.py" "$@" ;;
+  doctor) exec /bin/zsh "$logger" --stream "检查 NeuralStick Bridge 本地环境" python3 "$ROOT_DIR/scripts/doctor.py" "$@" ;;
   usb) exec /bin/zsh "$logger" "读取 USB 描述符" python3 "$ROOT_DIR/read_ncs2_usb.py" "$@" ;;
   worker) exec /bin/zsh "$logger" --stream "启动常驻 JSON worker" "$ROOT_DIR/build-arm64/ncs2_worker" "$ROOT_DIR/vendor/openvino-2022.3/bin/arm64/Release/plugins.xml" "$@" ;;
   source-export) exec /bin/zsh "$logger" "导出公开源码候选" python3 "$ROOT_DIR/scripts/export_source.py" "$@" ;;
@@ -23,7 +23,7 @@ case "$action" in
     print -- "  build-probe        Recompile the native C++ tools"
     print -- "  build-swift        Build arm64 SwiftPM library, tests, and demos"
     print -- "  check [--json]     Verify arm64 dependencies; optional JSON inventory"
-    print -- "  doctor [--json]    Check host, dependencies, runtime, firmware, and build state"
+    print -- "  doctor [--json] [--hardware]  Check environment; optional USB/MYRIAD check"
     print -- "  usb [--show-serial] Read descriptors; serial hidden by default"
     print -- "      --parse-configuration-hex HEX|@PATH Parse saved config offline"
     print -- "  list               Ask MYRIAD for available device IDs"

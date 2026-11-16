@@ -95,6 +95,16 @@ See [Worker API](docs/WORKER_API.md) for the protocol and client examples.
 
 `ncs2_async.NCS2Runtime` and Swift `NCS2Runtime` add explicit model registration, async task handles, a bounded FIFO device queue, queued-task cancellation and retained results. They reuse the existing worker protocols and switch/reuse workers in queue order. See the [async SDK guide](docs/ASYNC_SDK.md) for examples and lifecycle contracts.
 
+Install the Python SDK into a virtual environment:
+
+```sh
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install .
+```
+
+Applications can then use `from neuralstick_bridge import NCS2Runtime`. The wheel contains the Python SDK only; native workers and runtime files are supplied separately.
+
 ## Swift
 
 `Package.swift` exposes `NCS2Kit`, a dependency-free SwiftPM library for macOS 13+ arm64. It provides synchronous clients for both worker schemas and an actor-based async application SDK.

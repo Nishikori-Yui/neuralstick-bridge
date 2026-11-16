@@ -123,3 +123,5 @@ python3 -B -m unittest discover -s python/tests -p test_async_sdk.py -v
 ```
 
 Fake-worker checks exercise real subprocesses/pipes without USB. Hardware execution requires local arm64 workers, runtime, firmware and an NCS2.
+
+The runtime status snapshot retains `last_error` (Python) / `lastError` (Swift), the latest task failure other than queue cancellation. Releasing task results does not erase that diagnostic. `device_owned` / `deviceOwned` reports the SDK scheduler lease; the native worker owns the hardware lock. The snapshot is local state, not a live USB health probe.

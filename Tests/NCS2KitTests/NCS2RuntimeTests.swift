@@ -24,6 +24,7 @@ def trace(event, **fields):
     with (root/'trace').open('a') as stream:
         stream.write(json.dumps(dict(event=event,model=model,pid=os.getpid(),**fields))+'\n')
 trace('start')
+if model=='busy': sys.exit(3)
 if model=='startup-fail':
     print('not JSON',flush=True)
     sys.exit(1)
@@ -257,6 +258,9 @@ final class NCS2RuntimeTests: XCTestCase {
                 let runtime = try f.runtime()
                 try await f.register(runtime, schema: schema)
                 try await f.register(runtime, "startup-fail", schema: schema)
+                try await f.register(runtime, "busy", schema: schema)
+                let busy = try await runtime.submit(model: "busy", inputs: [[0,0]])
+                await self.expectCode(.deviceBusy) { try await busy.result() }
                 let startup = try await runtime.submit(model: "startup-fail", inputs: [[0,0]])
                 await self.expectCode(.modelLoadFailed) { try await startup.result() }
                 let cases: [(Float,NCS2SDKError.Code)] = [(-1,.protocolError),(-2,.inferenceFailed),(-3,.inferenceFailed)]
@@ -294,6 +298,7 @@ final class NCS2RuntimeTests: XCTestCase {
             XCTAssertEqual(before.registeredModelCount, 1)
             let task = try await runtime.submit(model: "a", inputs: [[99,0]])
             try await f.waitForInfer()
+            let queued = try await runtime.submit(model: "a", inputs: [[1,2]])
             let end = Date().addingTimeInterval(4)
             var running = await runtime.status()
             while running.workerModel != "a" {
@@ -301,6 +306,10 @@ final class NCS2RuntimeTests: XCTestCase {
                 try await Task.sleep(for: .milliseconds(5))
                 running = await runtime.status()
             }
+            XCTAssertEqual(running.queueDepth, 1)
+            let cancelled = try await queued.cancel()
+            XCTAssertTrue(cancelled)
+            try await queued.release()
             XCTAssertEqual(running.runningModel, "a")
             XCTAssertEqual(running.workerModel, "a")
             XCTAssertTrue(running.deviceOwned)
@@ -308,4 +317,23 @@ final class NCS2RuntimeTests: XCTestCase {
             _ = try await task.result()
         }
     }
+    func testStatusAfterFailureReleaseAndClose() async throws {
+        try await withFixture { f in
+            let runtime = try f.runtime()
+            try await f.register(runtime)
+            let handle = try await runtime.submit(model: "a", inputs: [[-2,0]])
+            await self.expectCode(.inferenceFailed) { try await handle.result() }
+            var state = await runtime.status()
+            XCTAssertNil(state.workerModel)
+            XCTAssertEqual(state.lastError?.code, .inferenceFailed)
+            try await handle.release()
+            try await runtime.close()
+            state = await runtime.status()
+            XCTAssertTrue(state.closed)
+            XCTAssertFalse(state.closing)
+            XCTAssertFalse(state.deviceOwned)
+            XCTAssertEqual(state.lastError?.code, .inferenceFailed)
+        }
+    }
+
 }

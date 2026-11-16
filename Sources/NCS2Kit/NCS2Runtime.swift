@@ -59,6 +59,7 @@ public struct NCS2RuntimeStatus: Sendable, Equatable {
     public let registeredModelCount: Int
     public let closed: Bool
     public let closing: Bool
+    public let lastError: NCS2SDKError?
 }
 
 /// A handle remains readable after runtime.close(); release() invalidates it.
@@ -211,16 +212,16 @@ private final class NCS2WorkerExecutor: @unchecked Sendable {
                 stateLock.lock()
                 loadedModel = model
                 stateLock.unlock()
-                } catch {
-                    let description = String(describing: error)
-                    if description.hasPrefix("device_busy:") {
-                        throw NCS2SDKError(.deviceBusy, description)
-                    }
-                    if description.hasPrefix("device_unavailable:") {
-                        throw NCS2SDKError(.deviceUnavailable, description)
-                    }
-                    throw NCS2SDKError(.modelLoadFailed, description)
+            } catch {
+                let description = String(describing: error)
+                if description.hasPrefix("device_busy:") {
+                    throw NCS2SDKError(.deviceBusy, description)
                 }
+                if description.hasPrefix("device_unavailable:") {
+                    throw NCS2SDKError(.deviceUnavailable, description)
+                }
+                throw NCS2SDKError(.modelLoadFailed, description)
+            }
         }
         do {
             switch session {
@@ -278,6 +279,7 @@ public actor NCS2Runtime {
     private var closing: Task<NCS2SDKError?, Never>?
     private var closed = false
     private var cleanupFinished = false
+    private var lastError: NCS2SDKError?
 
     public init(worker: URL, multiWorker: URL, plugins: URL, queueCapacity: Int = 32,
                 timeout: TimeInterval = 15, startupTimeout: TimeInterval = 30, deviceLock: URL? = nil) throws {
@@ -317,7 +319,8 @@ public actor NCS2Runtime {
             deviceOwned: worker.deviceOwned,
             registeredModelCount: models.count,
             closed: closed,
-            closing: closing != nil && !cleanupFinished
+            closing: closing != nil && !cleanupFinished,
+            lastError: lastError
         )
     }
 
@@ -391,7 +394,9 @@ public actor NCS2Runtime {
         record.outcome = outcome
         switch outcome {
         case .success: record.status = .succeeded
-        case .failure(let error): record.status = error.code == .taskCancelled ? .cancelled : .failed
+        case .failure(let error):
+            record.status = error.code == .taskCancelled ? .cancelled : .failed
+            if error.code != .taskCancelled { lastError = error }
         }
         let waiters = record.waiters.values
         record.waiters.removeAll()

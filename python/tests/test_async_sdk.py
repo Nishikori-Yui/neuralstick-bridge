@@ -21,6 +21,7 @@ def trace(event, **fields):
     with (root/'trace').open('a') as stream:
         stream.write(json.dumps(dict(event=event,model=model,pid=os.getpid(),**fields))+'\n')
 trace('start')
+if model=='busy': sys.exit(3)
 if model=='startup-fail':
     print('not JSON',flush=True)
     sys.exit(1)
@@ -216,6 +217,9 @@ class AsyncSDKTests(unittest.IsolatedAsyncioTestCase):
             runtime = self.runtime()
             await self.register(runtime, schema=schema)
             await self.register(runtime, 'startup-fail', schema=schema)
+            await self.register(runtime, 'busy', schema=schema)
+            busy = await runtime.submit('busy', [[0,0]])
+            await self.assert_code(Code.DEVICE_BUSY, busy.result())
             failed = await runtime.submit('startup-fail', [[0,0]])
             await self.assert_code(Code.MODEL_LOAD_FAILED, failed.result())
             for value, code in [(-1,Code.PROTOCOL_ERROR),(-2,Code.INFERENCE_FAILED),(-3,Code.INFERENCE_FAILED)]:
@@ -245,7 +249,11 @@ class AsyncSDKTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(before.registered_model_count, 1)
         task = await runtime.submit('a', [[99, 0]])
         await self.wait_until(lambda: any(row['event'] == 'infer' for row in self.trace()))
+        queued = await runtime.submit('a', [[1,2]])
         running = await self.wait_until_status(runtime, task)
+        self.assertEqual(running.queue_depth, 1)
+        self.assertTrue(await queued.cancel())
+        await queued.release()
         self.assertEqual(running.running_task_id, task.id)
         self.assertEqual(running.running_model, 'a')
         self.assertEqual(running.worker_model, 'a')
@@ -253,6 +261,22 @@ class AsyncSDKTests(unittest.IsolatedAsyncioTestCase):
         (self.root / 'gate').touch()
         await task.result()
         await task.release()
+
+    async def test_status_after_failure_release_and_close(self):
+        runtime = self.runtime()
+        await self.register(runtime)
+        failed = await runtime.submit('a', [[-2, 0]])
+        await self.assert_code(Code.INFERENCE_FAILED, failed.result())
+        state = await runtime.status()
+        self.assertIsNone(state.worker_model)
+        self.assertEqual(state.last_error.code, Code.INFERENCE_FAILED)
+        await failed.release()
+        await runtime.close()
+        state = await runtime.status()
+        self.assertTrue(state.closed)
+        self.assertFalse(state.closing)
+        self.assertFalse(state.device_owned)
+        self.assertEqual(state.last_error.code, Code.INFERENCE_FAILED)
 
     async def wait_until_status(self, runtime, task):
         async with asyncio.timeout(4):
