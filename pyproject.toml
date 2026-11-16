@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neuralstick-bridge"
+version = "0.1.0"
+description = "Native macOS arm64 Python SDK for Intel Neural Compute Stick 2"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+classifiers = [
+  "Operating System :: MacOS :: MacOS X",
+  "Programming Language :: Python :: 3",
+]
+
+[project.optional-dependencies]
+dev = ["jsonschema>=4.18"]
+
+[tool.setuptools]
+py-modules = ["ncs2_client", "ncs2_multi_client", "ncs2_async"]
+packages = ["neuralstick_bridge"]
+
+[tool.setuptools.package-dir]
+neuralstick_bridge = "python/neuralstick_bridge"

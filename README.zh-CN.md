@@ -89,7 +89,11 @@ schema 1 支持一个静态 f32 输入和一个静态 f32 输出。schema 2 支�
 - `ncs2_worker.cpp`、`ncs2_multi_worker.cpp`：schema 1/2 worker。
 - `ncs2_client.py`、`ncs2_multi_client.py`：同步 Python 客户端。
 - `ncs2_async.py`：异步 Python SDK。
-- `examples/`：Swift 客户端和 `NCS2Kit` 源码。
+- `Sources/NCS2Kit/`：Swift SDK 库源码。
+- `Examples/`：独立 Swift CLI 示例。
+- `Tests/NCS2KitTests/`：Swift 包测试。
+- `python/neuralstick_bridge/`：可安装的 Python SDK 门面。
+- `python/tests/`：Python 和协议测试。
 - `read_ncs2_usb.py`：只读 USB 描述符读取器。
 - `scripts/`：依赖准备、构建、架构审计和源码导出。
 - `docs/`：工具链、协议、SDK 和发布边界文档。

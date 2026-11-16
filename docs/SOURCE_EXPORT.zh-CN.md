@@ -14,11 +14,11 @@ python3 -B scripts/export_source.py --check dist/candidate
 当前选择范围包括：
 
 - 根目录明确列出的文件，以及可选的 `LICENSE` 和 `ncs2*.cpp` / `ncs2*.hpp`；
-- `docs/*.md`、`scripts/*.py`、`scripts/*.sh`、`tests/test_*.py`、`examples/*.swift` 和 `swift-tests/*.swift`；
+- `docs/`、`scripts/`、`python/tests/`、`python/neuralstick_bridge/`、`Sources/NCS2Kit/`、`Examples/` 和 `Tests/NCS2KitTests/` 的直接文件；协议 JSON 文件也包含在内，不扫描更深层目录；
 - `README.zh-CN.md` 与 `docs/*.zh-CN.md` 中文文档；
-- `.md`、`.json`、`.py`、`.sh`、`.cpp`、`.hpp` 和 `.swift` 后缀。
+- `.md`、`.json`、`.py`、`.sh`、`.cpp`、`.hpp` 、`.swift` 和 `.toml` 后缀。
 
-vendor 源码、构建产物、固件缓存、运行时二进制、results、原始 notebook、日志、缓存和嵌套源码目录都会被排除。
+vendor 源码、构建产物、固件缓存、运行时二进制、results、原始 notebook、日志、缓存和未列出的嵌套源码目录都会被排除。
 
 ## 校验
 

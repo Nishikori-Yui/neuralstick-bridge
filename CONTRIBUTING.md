@@ -15,7 +15,7 @@ Run from a checkout whose path may contain spaces:
 ./ncs2 build-probe
 ./ncs2 build-swift
 ./ncs2 check --json
-./ncs2_log_run.sh 'Unit tests' python3 -B -m unittest discover -s tests -v
+./ncs2_log_run.sh 'Unit tests' python3 -B -m unittest discover -s python/tests -v
 ```
 
 The unit tests use synthetic workers and saved USB descriptors. They do not access the device. Do not add a CPU fallback to make a MYRIAD test pass.

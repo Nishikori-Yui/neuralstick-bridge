@@ -112,7 +112,11 @@ The command compiles the example executables, builds the package, and runs its t
 - `ncs2_worker.cpp`, `ncs2_multi_worker.cpp`: persistent schema-1 and schema-2 workers.
 - `ncs2_client.py`, `ncs2_multi_client.py`: Python clients.
 - `ncs2_async.py`: asyncio model/task SDK and bounded device queue.
-- `examples/`: Swift clients and the `NCS2Kit` sources.
+- `Sources/NCS2Kit/`: Swift SDK library sources.
+- `Examples/`: standalone Swift CLI examples.
+- `Tests/NCS2KitTests/`: Swift package tests.
+- `python/neuralstick_bridge/`: installable Python SDK facade.
+- `python/tests/`: Python and protocol tests.
 - `read_ncs2_usb.py`: read-only USB descriptor reader.
 - `scripts/`: bootstrap, build, architecture audit, and source export.
 - `docs/TOOLCHAIN.md`: runtime design and build details.

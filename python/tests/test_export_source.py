@@ -10,7 +10,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-SCRIPT = Path(__file__).resolve().parents[1] / 'scripts/export_source.py'
+SCRIPT = Path(__file__).resolve().parents[2] / 'scripts/export_source.py'
 SPEC = importlib.util.spec_from_file_location('export_source', SCRIPT)
 exporter = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(exporter)
@@ -81,7 +81,7 @@ class ExportTests(unittest.TestCase):
                 path.chmod(mode)
 
     def test_missing_source_directory(self):
-        (self.root / 'examples').rename(self.root / 'hidden-examples')
+        (self.root / 'Examples').rename(self.root / 'hidden-Examples')
         self.rejected_before_creation()
 
     def test_symlink_source_file(self):

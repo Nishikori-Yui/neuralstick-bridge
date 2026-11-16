@@ -10,8 +10,8 @@ import tempfile
 import time
 import unittest
 
-ROOT = Path(__file__).resolve().parents[1]
-SOURCES = [ROOT / 'examples/NCS2WorkerClient.swift', ROOT / 'examples/NCS2MultiWorkerClient.swift']
+ROOT = Path(__file__).resolve().parents[2]
+SOURCES = [ROOT / 'Sources/NCS2Kit/NCS2WorkerClient.swift', ROOT / 'Sources/NCS2Kit/NCS2MultiWorkerClient.swift']
 
 HARNESS = r'''
 import Foundation
@@ -154,7 +154,7 @@ class SwiftMultiClientTests(unittest.TestCase):
         flags = ['xcrun','swiftc','-target','arm64-apple-macosx13.0','-Xlinker','-arch','-Xlinker','arm64',
                  '-swift-version','6','-parse-as-library','-O','-warnings-as-errors',
                  '-module-cache-path',str(cls.directory/'module-cache'),'-D','NCS2_CLIENT_LIBRARY']
-        for extra, output in [([],cls.binary),(['-D','NCS2_MULTI_CLIENT_LIBRARY',harness],cls.harness)]:
+        for extra, output in [([ROOT / "Examples/NCS2MultiWorkerDemo.swift"],cls.binary),(['-D','NCS2_MULTI_CLIENT_LIBRARY',harness],cls.harness)]:
             result = subprocess.run([*flags,*SOURCES,*extra,'-o',output],capture_output=True,text=True,timeout=120)
             if result.returncode: raise AssertionError(result.stdout+result.stderr)
             arch = subprocess.check_output(['lipo','-archs',output],text=True).strip()
@@ -164,7 +164,7 @@ class SwiftMultiClientTests(unittest.TestCase):
         path = self.directory / ('worker-'+str(time.monotonic_ns()))
         source = FAKE.replace('LAYOUT_VALUE',repr(layout)).replace('MODE_VALUE',repr(mode))
         source = source.replace('READY_UPDATE',ready).replace('RESPONSE_UPDATE',response)
-        path.write_text('#!'+sys.executable+'\n'+source)
+        path.write_text('#!'+os.path.realpath(sys.executable)+'\n'+source)
         path.chmod(0o700)
         return path
 

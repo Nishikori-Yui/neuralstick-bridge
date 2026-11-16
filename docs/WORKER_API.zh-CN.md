@@ -87,4 +87,4 @@ Python 客户端默认启动截止时间为 30 秒、请求截止时间为 15 �
 
 ## 机器可读协议
 
-[JSON Schema](worker-protocol.schema.json) 描述结构层面的帧类型。共享 golden fixture 位于 `tests/worker_protocol_fixtures.json`，由 native decoder 和 Python/Swift 客户端测试使用。UTF-8 字节长度、重复 key、有限值 JSON 解析、shape 元素积、聚合限制和 ready 端口对应关系由实现进行语义校验，JSON Schema 不表达这些约束。
+[JSON Schema](worker-protocol.schema.json) 描述结构层面的帧类型。共享 golden fixture 位于 `python/tests/worker_protocol_fixtures.json`，由 native decoder 和 Python/Swift 客户端测试使用。UTF-8 字节长度、重复 key、有限值 JSON 解析、shape 元素积、聚合限制和 ready 端口对应关系由实现进行语义校验，JSON Schema 不表达这些约束。

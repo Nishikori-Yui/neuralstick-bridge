@@ -4,7 +4,15 @@ The SDK adds an in-memory model registry and a bounded FIFO queue above the exis
 
 ## Python
 
-Python 3.11+ needs only the standard library. Run with the repository on the module search path.
+Install the Python 3.11+ SDK from a checkout. It has no runtime Python dependencies:
+
+```sh
+python3 -m pip install .
+# Developer tools, including JSON Schema validation:
+python3 -m pip install -e '.[dev]'
+```
+
+`from neuralstick_bridge import NCS2Runtime` is the package facade. Existing `ncs2_async`, `ncs2_client` and `ncs2_multi_client` imports are included in the same wheel. Workers, OpenVINO and firmware are built/provided separately; installation does not fetch them.
 
 ```python
 import asyncio
@@ -110,7 +118,7 @@ Only schema 1 reports an inference timer. Python inference_milliseconds and Swif
 The worker protocols are unchanged. Existing Python and Swift synchronous clients remain available. Python fatal responses now use NCS2FatalError, still a subclass of NCS2WorkerError. Swift keeps NCS2ClientError and adds isFatalResponse. These classify failure without parsing vendor message text.
 
 ```sh
-python3 -B -m unittest discover -s tests -p test_async_sdk.py -v
+python3 -B -m unittest discover -s python/tests -p test_async_sdk.py -v
 ./ncs2 build-swift
 ```
 

@@ -8,7 +8,7 @@ import unittest
 
 from ncs2_async import NCS2Runtime, NCS2SDKError, NCS2ErrorCode
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 class NativeLockTests(unittest.IsolatedAsyncioTestCase):

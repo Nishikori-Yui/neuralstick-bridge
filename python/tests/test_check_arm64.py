@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
 import check_arm64
 
 
@@ -97,7 +97,7 @@ class ArchitectureAuditTests(unittest.TestCase):
 
 class ArchitectureLauncherTests(unittest.TestCase):
     def test_json_launcher_stdout_is_one_document_and_notebook_is_written(self):
-        root = Path(__file__).resolve().parents[1]
+        root = Path(__file__).resolve().parents[2]
         with tempfile.TemporaryDirectory(prefix='ncs2-arch-launcher-') as directory:
             notebook = Path(directory) / 'audit.md'
             result = subprocess.run([str(root / 'ncs2'), 'check', '--json'],

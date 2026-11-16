@@ -6,7 +6,7 @@ import sys
 import tempfile
 import unittest
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from ncs2_async import NCS2Runtime, NCS2SDKError, NCS2ErrorCode as Code, NCS2TaskStatus as Status
 

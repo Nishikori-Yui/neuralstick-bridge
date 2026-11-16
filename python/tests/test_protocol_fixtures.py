@@ -10,8 +10,8 @@ import unittest
 from ncs2_client import NCS2Worker
 from ncs2_multi_client import NCS2MultiWorker
 
-ROOT = Path(__file__).resolve().parents[1]
-CORPUS = ROOT/'tests/worker_protocol_fixtures.json'
+ROOT = Path(__file__).resolve().parents[2]
+CORPUS = ROOT/'python/tests/worker_protocol_fixtures.json'
 
 
 class ProtocolFixtures(unittest.TestCase):

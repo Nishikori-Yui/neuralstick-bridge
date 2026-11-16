@@ -4,7 +4,16 @@ SDK 在现有 schema 1/2 同步客户端之上增加进程内模型注册和有�
 
 ## Python
 
-Python 3.11+ 只需要标准库：
+Python SDK 需要 Python 3.11+，运行时只依赖标准库：
+
+```sh
+python3 -m pip install .
+# 开发工具，包括 JSON Schema 校验：
+python3 -m pip install -e '.[dev]'
+```
+
+安装后可用 `from neuralstick_bridge import NCS2Runtime`。同一 wheel 保留 `ncs2_async`、`ncs2_client` 和 `ncs2_multi_client` 导入。安装过程不下载 worker、OpenVINO 或固件，它们需单独构建或提供。
+
 
 ```python
 import asyncio

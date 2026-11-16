@@ -1,6 +1,6 @@
 """Native macOS arm64 tests using synthetic workers ONLY; never opens USB.
 
-Run: python3 -B -m unittest discover -s tests -p test_swift_client.py -v
+Run: python3 -B -m unittest discover -s python/tests -p test_swift_client.py -v
 Synthetic responses deliberately claim hardware_executed to exercise validation.
 Their success is protocol/numerics testing, NOT evidence of MYRIAD execution.
 The real ncs2_worker executable is never launched, including --validate-only.
@@ -19,8 +19,8 @@ import time
 import unittest
 
 
-ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "examples/NCS2WorkerClient.swift"
+ROOT = Path(__file__).resolve().parents[2]
+SOURCE = ROOT / "Sources/NCS2Kit/NCS2WorkerClient.swift"
 CASE = "conv_1x3x16x16"
 
 # Separately compiled harness exercises reusable APIs and raw pipe boundaries.
@@ -243,7 +243,7 @@ class SwiftClientTests(unittest.TestCase):
         flags = ["xcrun", "swiftc", "-target", "arm64-apple-macosx13.0", "-Xlinker", "-arch", "-Xlinker", "arm64",
                  "-swift-version", "6", "-parse-as-library", "-O", "-warnings-as-errors",
                  "-module-cache-path", str(cls.directory / "module-cache")]
-        for args in ([*flags, SOURCE, "-o", cls.binary],
+        for args in ([*flags, SOURCE, ROOT / "Examples/NCS2WorkerDemo.swift", "-o", cls.binary],
                      [*flags, "-D", "NCS2_CLIENT_LIBRARY", SOURCE, harness_source, "-o", cls.harness]):
             result = command(args, capture_output=True, text=True, timeout=120)
             if result.returncode:
@@ -255,7 +255,7 @@ class SwiftClientTests(unittest.TestCase):
 
     def fake(self, behavior="emit(ready)\nexchange()\n"):
         path = self.directory / ("fake-" + str(time.monotonic_ns()))
-        path.write_text("#!" + sys.executable + "\n" + FAKE_PREFIX + "\n" + textwrap.dedent(behavior))
+        path.write_text("#!" + os.path.realpath(sys.executable) + "\n" + FAKE_PREFIX + "\n" + textwrap.dedent(behavior))
         path.chmod(0o700)
         return path
 

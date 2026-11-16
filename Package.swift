@@ -10,16 +10,12 @@ let package = Package(
     targets: [
         .target(
             name: "NCS2Kit",
-            path: "examples",
-            swiftSettings: [
-                .define("NCS2_CLIENT_LIBRARY"),
-                .define("NCS2_MULTI_CLIENT_LIBRARY"),
-            ]
+            path: "Sources/NCS2Kit"
         ),
         .testTarget(
             name: "NCS2KitTests",
             dependencies: ["NCS2Kit"],
-            path: "swift-tests"
+            path: "Tests/NCS2KitTests"
         ),
     ]
 )

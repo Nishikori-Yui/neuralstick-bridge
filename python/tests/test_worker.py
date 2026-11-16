@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from ncs2_client import NCS2Worker, NCS2WorkerError, NCS2Timeout
 WORKER = ROOT / "build-arm64/ncs2_worker"

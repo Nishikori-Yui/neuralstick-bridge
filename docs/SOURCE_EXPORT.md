@@ -19,14 +19,14 @@ python3 -B scripts/export_source.py --check dist/CANDIDATE
 
 The exporter uses an explicit allowlist. `REQUIRED_FILES` covers the launcher, lockfile, Python clients, C++ workers and probe, build/bootstrap/audit/export scripts, core tests, Swift package files, and public documentation. A missing required file or source directory fails the export.
 
-Additional selection is shallow:
+Additional selection is limited to explicit directory roots:
 
 - Explicit root files, plus optional root `LICENSE` and root `ncs2*.cpp` / `ncs2*.hpp`.
-- Immediate `docs/*.md`, `scripts/*.py`, `scripts/*.sh`, `tests/test_*.py`, `examples/*.swift`, and `swift-tests/*.swift` files.
+- Immediate files in `docs/`, `scripts/`, `python/tests/`, `python/neuralstick_bridge/`, `Sources/NCS2Kit/`, `Examples/`, and `Tests/NCS2KitTests/`; their descendants are not scanned. Protocol JSON assets are included.
 - The root `README.zh-CN.md` and immediate `docs/*.zh-CN.md` Simplified Chinese documents.
-- Source suffixes are limited to `.md`, `.json`, `.py`, `.sh`, `.cpp`, `.hpp`, and `.swift`.
+- Source suffixes are limited to `.md`, `.json`, `.py`, `.sh`, `.cpp`, `.hpp`, `.swift`, and `.toml`.
 
-Vendor trees, build outputs, firmware caches, runtime binaries, result directories, raw notebooks and logs, caches, nested source directories, and `.github` metadata are excluded. Maintain the inventory when adding or removing a core dependency; selection is not automatic dependency discovery.
+Vendor trees, build outputs, firmware caches, runtime binaries, result directories, raw notebooks and logs, caches, unlisted nested source directories, and `.github` metadata are excluded. Maintain the inventory when adding or removing a core dependency; selection is not automatic dependency discovery.
 
 ## Validation
 

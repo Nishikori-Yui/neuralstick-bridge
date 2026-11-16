@@ -7,7 +7,7 @@ import sys
 import tempfile
 import unittest
 
-LOGGER = Path(__file__).resolve().parents[1] / 'scripts/log_run.py'
+LOGGER = Path(__file__).resolve().parents[2] / 'scripts/log_run.py'
 
 
 class NotebookTests(unittest.TestCase):

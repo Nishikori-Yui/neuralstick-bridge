@@ -5,7 +5,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts/doctor.py"
 SPEC = importlib.util.spec_from_file_location("doctor", SCRIPT)
 doctor = importlib.util.module_from_spec(SPEC)

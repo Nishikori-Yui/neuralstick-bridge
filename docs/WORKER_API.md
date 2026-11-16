@@ -110,4 +110,4 @@ There is no promise of hot-unplug recovery. Restart a failed worker explicitly. 
 
 ## Machine-readable contract
 
-[JSON Schema](worker-protocol.schema.json) describes the structural frame families. Shared golden frames live in `tests/worker_protocol_fixtures.json` and are exercised by native decoders and Python/Swift clients. The schema does not express UTF-8 byte lengths, duplicate keys, finite JSON parsing, shape products, aggregate limits, or correspondence with the ready ports; those remain semantic checks in the implementations.
+[JSON Schema](worker-protocol.schema.json) describes the structural frame families. Shared golden frames live in `python/tests/worker_protocol_fixtures.json` and are exercised by native decoders and Python/Swift clients. The schema does not express UTF-8 byte lengths, duplicate keys, finite JSON parsing, shape products, aggregate limits, or correspondence with the ready ports; those remain semantic checks in the implementations.

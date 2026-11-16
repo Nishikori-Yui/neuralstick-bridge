@@ -4,8 +4,8 @@ import XCTest
 
 final class ProtocolFixtureTests: XCTestCase {
     func testReadyDescriptorsDecodeSharedCorpus() throws {
-        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-        let data = try Data(contentsOf: root.appendingPathComponent("tests/worker_protocol_fixtures.json"))
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let data = try Data(contentsOf: root.appendingPathComponent("python/tests/worker_protocol_fixtures.json"))
         let corpus = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         let cases = try XCTUnwrap(corpus["cases"] as? [[String: Any]])
         for version in [1, 2] {
