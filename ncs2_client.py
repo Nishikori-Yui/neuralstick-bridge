@@ -52,7 +52,7 @@ class NCS2Worker:
     protocol_version = 1
     frame_limit = 1024 * 1024
 
-    def __init__(self, worker: Path, plugins: Path, model: Path, *, timeout=15.0, startup_timeout=30.0, start_new_session=True, stderr=None):
+    def __init__(self, worker: Path, plugins: Path, model: Path, *, timeout=15.0, startup_timeout=30.0, start_new_session=True, stderr=None, environment=None):
         if not 0 < timeout <= 300 or not 0 < startup_timeout <= 300:
             raise ValueError("Timeouts must be finite and in (0,300].")
         self.start_new_session = start_new_session
@@ -63,7 +63,7 @@ class NCS2Worker:
         self._lock = threading.Lock()
         self.process = subprocess.Popen(
             [str(worker), str(plugins), "--model", str(model)],
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=0, start_new_session=start_new_session, stderr=stderr,
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=0, start_new_session=start_new_session, stderr=stderr, env=environment,
         )
         try:
             os.set_blocking(self.process.stdout.fileno(), False)
@@ -84,6 +84,8 @@ class NCS2Worker:
             self.output_shape = ready["output"]["shape"]
         except BaseException:
             self._terminate()
+            if self.process.returncode == 3:
+                raise NCS2WorkerError("device_busy: native worker could not acquire device") from None
             raise
 
     def _read(self, deadline):

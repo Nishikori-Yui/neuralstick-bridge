@@ -157,9 +157,10 @@ class _WorkerEngine:
             return
         fd = None
         try:
-            fd = os.open(self.lock_path, os.O_CREAT | os.O_RDWR | os.O_CLOEXEC | os.O_NOFOLLOW, 0o600)
+            fd = os.open(str(self.lock_path) + ".sdk", os.O_CREAT | os.O_RDWR | os.O_CLOEXEC | os.O_NOFOLLOW, 0o600)
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            self.lease = fd
+            with self._state_lock:
+                self.lease = fd
         except BlockingIOError as error:
             if fd is not None:
                 os.close(fd)
@@ -171,7 +172,8 @@ class _WorkerEngine:
 
     def _close_client(self, *, force=False):
         client, self.client = self.client, None
-        self.model = None
+        with self._state_lock:
+            self.model = None
         if client is not None:
             client.close(force=force)
 
@@ -186,8 +188,10 @@ class _WorkerEngine:
                 cls = NCS2Worker if model.schema == 1 else NCS2MultiWorker
                 self.client = cls(self.worker if model.schema == 1 else self.multi_worker,
                                   self.plugins, model.xml, timeout=self.timeout,
-                                  startup_timeout=self.startup_timeout)
-                self.model = model
+                                  startup_timeout=self.startup_timeout,
+                                  environment={**os.environ, "NCS2_DEVICE_LOCK": str(self.lock_path)})
+                with self._state_lock:
+                    self.model = model
             except (OSError, NCS2WorkerError) as error:
                 if str(error).startswith("device_busy:"):
                     raise NCS2SDKError(NCS2ErrorCode.DEVICE_BUSY, str(error)) from error
@@ -223,7 +227,8 @@ class _WorkerEngine:
         finally:
             if self.lease is not None:
                 os.close(self.lease)
-                self.lease = None
+                with self._state_lock:
+                    self.lease = None
 
 
 class NCS2Runtime:
@@ -302,7 +307,7 @@ class NCS2Runtime:
             device_owned=device_owned,
             registered_model_count=len(self._models),
             closed=self._closed,
-            closing=self._closing is not None,
+            closing=self._closing is not None and not self._closing.done(),
         )
 
     async def submit(self, model: str, inputs: Sequence[Sequence[float]]) -> NCS2Task:

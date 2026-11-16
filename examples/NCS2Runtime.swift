@@ -151,7 +151,7 @@ private final class NCS2WorkerExecutor: @unchecked Sendable {
         guard lease < 0 else { return }
         // O_EXLOCK is macOS's atomic open + BSD flock operation. It interoperates
         // with Python's fcntl.flock without adding a C shim to the Swift package.
-        let fd = Darwin.open(lock.path, O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW | O_EXLOCK | O_NONBLOCK, mode_t(0o600))
+        let fd = Darwin.open(lock.path + ".sdk", O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW | O_EXLOCK | O_NONBLOCK, mode_t(0o600))
         guard fd >= 0 else {
             let code = errno
             if code == EWOULDBLOCK || code == EAGAIN {
@@ -201,10 +201,12 @@ private final class NCS2WorkerExecutor: @unchecked Sendable {
                 switch model.schema {
                 case .single:
                     session = .single(try NCS2WorkerClient(worker: worker, plugins: plugins, model: model.xml,
-                                                         timeout: timeout, startupTimeout: startupTimeout))
+                                                         timeout: timeout, startupTimeout: startupTimeout,
+                                                         environment: ProcessInfo.processInfo.environment.merging(["NCS2_DEVICE_LOCK": lock.path]) { _, new in new }))
                 case .multi:
                     session = .multi(try NCS2MultiWorkerClient(worker: multiWorker, plugins: plugins, model: model.xml,
-                                                             timeout: timeout, startupTimeout: startupTimeout))
+                                                             timeout: timeout, startupTimeout: startupTimeout,
+                                                         environment: ProcessInfo.processInfo.environment.merging(["NCS2_DEVICE_LOCK": lock.path]) { _, new in new }))
                 }
                 stateLock.lock()
                 loadedModel = model
@@ -275,6 +277,7 @@ public actor NCS2Runtime {
     private var runner: Task<Void, Never>?
     private var closing: Task<NCS2SDKError?, Never>?
     private var closed = false
+    private var cleanupFinished = false
 
     public init(worker: URL, multiWorker: URL, plugins: URL, queueCapacity: Int = 32,
                 timeout: TimeInterval = 15, startupTimeout: TimeInterval = 30, deviceLock: URL? = nil) throws {
@@ -284,7 +287,7 @@ public actor NCS2Runtime {
             throw NCS2SDKError(.invalidArgument, "Require file URLs, queue capacity 1..32 and timeouts in (0,300]")
         }
         capacity = queueCapacity
-        let lock = deviceLock ?? URL(fileURLWithPath: "/tmp/neuralstick-bridge-device-\(getuid()).lock")
+        let lock = deviceLock ?? URL(fileURLWithPath: ProcessInfo.processInfo.environment["NCS2_DEVICE_LOCK"] ?? "/tmp/neuralstick-bridge-device-\(getuid()).lock")
         executor = NCS2WorkerExecutor(worker: worker, multiWorker: multiWorker, plugins: plugins,
                                       timeout: timeout, startupTimeout: startupTimeout, lock: lock)
     }
@@ -314,7 +317,7 @@ public actor NCS2Runtime {
             deviceOwned: worker.deviceOwned,
             registeredModelCount: models.count,
             closed: closed,
-            closing: closing != nil
+            closing: closing != nil && !cleanupFinished
         )
     }
 
@@ -422,6 +425,8 @@ public actor NCS2Runtime {
                 return await executor.close()
             }
         }
-        if let failure = await closing!.value { throw failure }
+        let failure = await closing!.value
+        cleanupFinished = true
+        if let failure { throw failure }
     }
 }

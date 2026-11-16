@@ -293,7 +293,8 @@ public final class NCS2WorkerClient {
     public private(set) var ready: NCS2Ready?
 
     public init(worker: URL, plugins: URL, model: URL, timeout: TimeInterval = 15,
-                startupTimeout: TimeInterval = 30, exitTimeout: TimeInterval = 3) throws {
+                startupTimeout: TimeInterval = 30, exitTimeout: TimeInterval = 3,
+                environment: [String: String]? = nil) throws {
         // Validate every duration before spawning anything.
         _ = try PipeDeadline(seconds: timeout)
         _ = try PipeDeadline(seconds: startupTimeout)
@@ -305,6 +306,7 @@ public final class NCS2WorkerClient {
         let output = Pipe()
         do {
             pipe = try JSONLinePipe(reader: output.fileHandleForReading, writer: input.fileHandleForWriting)
+            process.environment = environment
             process.executableURL = worker
             process.arguments = [plugins.path, "--model", model.path]
             process.standardInput = input
@@ -330,7 +332,11 @@ public final class NCS2WorkerClient {
             try? input.fileHandleForWriting.close()
             try? output.fileHandleForReading.close()
             try? output.fileHandleForWriting.close()
-            throw cleaningUp(error)
+            let failure = cleaningUp(error)
+            if launched, !process.isRunning, process.terminationStatus == 3 {
+                throw NCS2ClientError("device_busy: native worker could not acquire device")
+            }
+            throw failure
         }
     }
 

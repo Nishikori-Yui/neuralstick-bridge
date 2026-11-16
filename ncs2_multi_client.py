@@ -19,7 +19,7 @@ class NCS2MultiWorker:
     frame_limit = 1024 * 1024
 
     def __init__(self, worker: Path, plugins: Path, model: Path, *, timeout=15.0,
-                 startup_timeout=30.0, start_new_session=True, stderr=None):
+                 startup_timeout=30.0, start_new_session=True, stderr=None, environment=None):
         if not 0 < timeout <= 300 or not 0 < startup_timeout <= 300:
             raise ValueError("Timeouts must be finite and in (0,300].")
         self.timeout = timeout
@@ -31,7 +31,7 @@ class NCS2MultiWorker:
         self.process = subprocess.Popen(
             [str(worker), str(plugins), "--model", str(model)],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=0,
-            start_new_session=start_new_session, stderr=stderr)
+            start_new_session=start_new_session, stderr=stderr, env=environment)
         try:
             os.set_blocking(self.process.stdout.fileno(), False)
             os.set_blocking(self.process.stdin.fileno(), False)
@@ -44,6 +44,8 @@ class NCS2MultiWorker:
             self.outputs = self._descriptors(ready.get("outputs"), "outputs")
         except BaseException:
             self._terminate()
+            if self.process.returncode == 3:
+                raise NCS2WorkerError("device_busy: native worker could not acquire device") from None
             raise
 
     @staticmethod

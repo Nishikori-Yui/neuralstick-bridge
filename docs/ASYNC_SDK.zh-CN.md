@@ -85,7 +85,9 @@ runtime actor 持有调度和结果状态；独立的串行 I/O executor 负责�
 
 ## 设备占用与错误
 
-第一个实际执行的任务会获取跨 Python SDK、Swift SDK、probe 和 native worker 共享的 macOS BSD advisory lock。默认锁路径是 `/tmp/neuralstick-bridge-device-UID.lock`。设置 `NCS2_DEVICE_LOCK`、`device_lock` 或 `deviceLock` 可以选择其他路径。竞争进程会在启动 MYRIAD 会话前收到 `device_busy`。`--validate-only` worker 检查不会获取设备锁。不会安装 daemon，也不会使用数据库。
+SDK 在 `/tmp/neuralstick-bridge-device-UID.lock.sdk` 持有调度租约，直到关闭。native worker 和 probe 在访问 MYRIAD 期间持有去掉 `.sdk` 后缀的设备锁。两个锁分开，避免 worker 和自己的父进程竞争。同步客户端由 native worker 保护，外部 OpenVINO 程序不参与此协议。
+
+`NCS2_DEVICE_LOCK`、`device_lock` 或 `deviceLock` 可以指定设备锁路径，SDK 会传给子 worker。模型切换的间隙，竞争 probe 可能取得设备锁；后续启动会返回 `device_busy`，不会自动重试推理。`--validate-only` 不获取锁。不安装 daemon 或数据库。
 
 稳定错误分类包括：
 
