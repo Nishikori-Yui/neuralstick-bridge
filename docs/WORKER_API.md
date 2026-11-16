@@ -107,3 +107,7 @@ The Python clients default to a 30-second startup deadline and a 15-second reque
 Normal shutdown sends the protocol request, closes stdin, and waits for exit. Cleanup escalates to SIGTERM and then SIGKILL when needed, and always reaps the child. The worker itself bounds an inference wait to 10 seconds, but the parent deadline remains the final boundary.
 
 There is no promise of hot-unplug recovery. Restart a failed worker explicitly. If a killed process leaves the device in a booted state, retry after USB enumeration returns the device; the client does not retry startup automatically.
+
+## Machine-readable contract
+
+[JSON Schema](worker-protocol.schema.json) describes the structural frame families. Shared golden frames live in `tests/worker_protocol_fixtures.json` and are exercised by native decoders and Python/Swift clients. The schema does not express UTF-8 byte lengths, duplicate keys, finite JSON parsing, shape products, aggregate limits, or correspondence with the ready ports; those remain semantic checks in the implementations.

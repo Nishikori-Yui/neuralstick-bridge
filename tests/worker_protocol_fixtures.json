@@ -1,0 +1,622 @@
+{
+  "format_version": 1,
+  "cases": [
+    {
+      "name": "schema1-ready",
+      "valid": true,
+      "frame": {
+        "schema_version": 1,
+        "type": "ready",
+        "case": "fixture",
+        "device": "MYRIAD",
+        "validation_only": false,
+        "input": {
+          "dtype": "f32",
+          "shape": [
+            1,
+            4
+          ]
+        },
+        "output": {
+          "dtype": "f32",
+          "shape": [
+            1,
+            4
+          ]
+        }
+      }
+    },
+    {
+      "name": "schema1-validation-ready",
+      "valid": true,
+      "frame": {
+        "schema_version": 1,
+        "type": "ready",
+        "case": "fixture",
+        "device": "none",
+        "validation_only": true,
+        "input": {
+          "dtype": "f32",
+          "shape": [
+            1,
+            4
+          ]
+        },
+        "output": {
+          "dtype": "f32",
+          "shape": [
+            1,
+            4
+          ]
+        }
+      }
+    },
+    {
+      "name": "schema1-health-request",
+      "valid": true,
+      "frame": {
+        "schema_version": 1,
+        "request_id": "fixture",
+        "operation": "health"
+      }
+    },
+    {
+      "name": "schema1-shutdown-request",
+      "valid": true,
+      "frame": {
+        "schema_version": 1,
+        "request_id": "fixture",
+        "operation": "shutdown"
+      }
+    },
+    {
+      "name": "schema1-infer-request",
+      "valid": true,
+      "frame": {
+        "schema_version": 1,
+        "request_id": "fixture",
+        "operation": "infer",
+        "input": {
+          "dtype": "f32",
+          "shape": [
+            1,
+            4
+          ],
+          "data": [
+            -2,
+            0.5,
+            -1,
+            3
+          ]
+        }
+      }
+    },
+    {
+      "name": "schema1-control-response",
+      "valid": true,
+      "frame": {
+        "schema_version": 1,
+        "type": "response",
+        "request_id": "fixture",
+        "status": "ok",
+        "case": "fixture",
+        "completed": 2,
+        "hardware_executed": false
+      }
+    },
+    {
+      "name": "schema1-infer-response",
+      "valid": true,
+      "frame": {
+        "schema_version": 1,
+        "type": "response",
+        "request_id": "fixture",
+        "status": "ok",
+        "case": "fixture",
+        "hardware_executed": true,
+        "shape": [
+          1,
+          4
+        ],
+        "dtype": "f32",
+        "infer_ms": 1.25,
+        "output": [
+          0,
+          0.5,
+          0,
+          3
+        ]
+      }
+    },
+    {
+      "name": "schema1-error-False",
+      "valid": true,
+      "frame": {
+        "schema_version": 1,
+        "type": "response",
+        "request_id": "",
+        "status": "error",
+        "fatal": false,
+        "error": "invalid request"
+      }
+    },
+    {
+      "name": "schema1-error-True",
+      "valid": true,
+      "frame": {
+        "schema_version": 1,
+        "type": "response",
+        "request_id": "",
+        "status": "error",
+        "fatal": true,
+        "error": "device failed"
+      }
+    },
+    {
+      "name": "schema1-unknown-field",
+      "valid": false,
+      "frame": {
+        "schema_version": 1,
+        "type": "ready",
+        "case": "fixture",
+        "device": "MYRIAD",
+        "validation_only": false,
+        "input": {
+          "dtype": "f32",
+          "shape": [
+            1,
+            4
+          ]
+        },
+        "output": {
+          "dtype": "f32",
+          "shape": [
+            1,
+            4
+          ]
+        },
+        "unexpected": 1
+      }
+    },
+    {
+      "name": "schema1-bad-version",
+      "valid": false,
+      "frame": {
+        "schema_version": 3,
+        "type": "ready",
+        "case": "fixture",
+        "device": "MYRIAD",
+        "validation_only": false,
+        "input": {
+          "dtype": "f32",
+          "shape": [
+            1,
+            4
+          ]
+        },
+        "output": {
+          "dtype": "f32",
+          "shape": [
+            1,
+            4
+          ]
+        }
+      }
+    },
+    {
+      "name": "schema1-boolean-dimension",
+      "valid": false,
+      "frame": {
+        "schema_version": 1,
+        "type": "ready",
+        "case": "fixture",
+        "device": "MYRIAD",
+        "validation_only": false,
+        "input": {
+          "dtype": "f32",
+          "shape": [
+            true,
+            4
+          ]
+        },
+        "output": {
+          "dtype": "f32",
+          "shape": [
+            true,
+            4
+          ]
+        }
+      }
+    },
+    {
+      "name": "schema1-missing-fields",
+      "valid": false,
+      "frame": {
+        "schema_version": 1,
+        "type": "response",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "schema2-ready",
+      "valid": true,
+      "frame": {
+        "schema_version": 2,
+        "type": "ready",
+        "case": "fixture",
+        "device": "MYRIAD",
+        "validation_only": false,
+        "inputs": [
+          {
+            "index": 0,
+            "dtype": "f32",
+            "shape": [
+              1,
+              4
+            ]
+          },
+          {
+            "index": 1,
+            "dtype": "f32",
+            "shape": [
+              1,
+              4
+            ]
+          }
+        ],
+        "outputs": [
+          {
+            "index": 0,
+            "dtype": "f32",
+            "shape": [
+              1,
+              4
+            ]
+          },
+          {
+            "index": 1,
+            "dtype": "f32",
+            "shape": [
+              1,
+              4
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "schema2-validation-ready",
+      "valid": true,
+      "frame": {
+        "schema_version": 2,
+        "type": "ready",
+        "case": "fixture",
+        "device": "none",
+        "validation_only": true,
+        "inputs": [
+          {
+            "index": 0,
+            "dtype": "f32",
+            "shape": [
+              1,
+              4
+            ]
+          },
+          {
+            "index": 1,
+            "dtype": "f32",
+            "shape": [
+              1,
+              4
+            ]
+          }
+        ],
+        "outputs": [
+          {
+            "index": 0,
+            "dtype": "f32",
+            "shape": [
+              1,
+              4
+            ]
+          },
+          {
+            "index": 1,
+            "dtype": "f32",
+            "shape": [
+              1,
+              4
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "schema2-health-request",
+      "valid": true,
+      "frame": {
+        "schema_version": 2,
+        "request_id": "fixture",
+        "operation": "health"
+      }
+    },
+    {
+      "name": "schema2-shutdown-request",
+      "valid": true,
+      "frame": {
+        "schema_version": 2,
+        "request_id": "fixture",
+        "operation": "shutdown"
+      }
+    },
+    {
+      "name": "schema2-infer-request",
+      "valid": true,
+      "frame": {
+        "schema_version": 2,
+        "request_id": "fixture",
+        "operation": "infer",
+        "inputs": [
+          {
+            "index": 0,
+            "dtype": "f32",
+            "shape": [
+              1,
+              4
+            ],
+            "data": [
+              -2,
+              0.5,
+              -1,
+              3
+            ]
+          },
+          {
+            "index": 1,
+            "dtype": "f32",
+            "shape": [
+              1,
+              4
+            ],
+            "data": [
+              -2,
+              0.5,
+              -1,
+              3
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "schema2-control-response",
+      "valid": true,
+      "frame": {
+        "schema_version": 2,
+        "type": "response",
+        "request_id": "fixture",
+        "status": "ok",
+        "case": "fixture",
+        "completed": 2,
+        "hardware_executed": false
+      }
+    },
+    {
+      "name": "schema2-infer-response",
+      "valid": true,
+      "frame": {
+        "schema_version": 2,
+        "type": "response",
+        "request_id": "fixture",
+        "status": "ok",
+        "case": "fixture",
+        "hardware_executed": true,
+        "outputs": [
+          {
+            "index": 0,
+            "dtype": "f32",
+            "shape": [
+              1,
+              4
+            ],
+            "data": [
+              0,
+              0.5,
+              0,
+              3
+            ]
+          },
+          {
+            "index": 1,
+            "dtype": "f32",
+            "shape": [
+              1,
+              4
+            ],
+            "data": [
+              0,
+              0.5,
+              0,
+              3
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "schema2-error-False",
+      "valid": true,
+      "frame": {
+        "schema_version": 2,
+        "type": "response",
+        "request_id": "",
+        "status": "error",
+        "fatal": false,
+        "error": "invalid request"
+      }
+    },
+    {
+      "name": "schema2-error-True",
+      "valid": true,
+      "frame": {
+        "schema_version": 2,
+        "type": "response",
+        "request_id": "",
+        "status": "error",
+        "fatal": true,
+        "error": "device failed"
+      }
+    },
+    {
+      "name": "schema2-unknown-field",
+      "valid": false,
+      "frame": {
+        "schema_version": 2,
+        "type": "ready",
+        "case": "fixture",
+        "device": "MYRIAD",
+        "validation_only": false,
+        "inputs": [
+          {
+            "index": 0,
+            "dtype": "f32",
+            "shape": [
+              1,
+              4
+            ]
+          },
+          {
+            "index": 1,
+            "dtype": "f32",
+            "shape": [
+              1,
+              4
+            ]
+          }
+        ],
+        "outputs": [
+          {
+            "index": 0,
+            "dtype": "f32",
+            "shape": [
+              1,
+              4
+            ]
+          },
+          {
+            "index": 1,
+            "dtype": "f32",
+            "shape": [
+              1,
+              4
+            ]
+          }
+        ],
+        "unexpected": 1
+      }
+    },
+    {
+      "name": "schema2-bad-version",
+      "valid": false,
+      "frame": {
+        "schema_version": 3,
+        "type": "ready",
+        "case": "fixture",
+        "device": "MYRIAD",
+        "validation_only": false,
+        "inputs": [
+          {
+            "index": 0,
+            "dtype": "f32",
+            "shape": [
+              1,
+              4
+            ]
+          },
+          {
+            "index": 1,
+            "dtype": "f32",
+            "shape": [
+              1,
+              4
+            ]
+          }
+        ],
+        "outputs": [
+          {
+            "index": 0,
+            "dtype": "f32",
+            "shape": [
+              1,
+              4
+            ]
+          },
+          {
+            "index": 1,
+            "dtype": "f32",
+            "shape": [
+              1,
+              4
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "schema2-boolean-dimension",
+      "valid": false,
+      "frame": {
+        "schema_version": 2,
+        "type": "ready",
+        "case": "fixture",
+        "device": "MYRIAD",
+        "validation_only": false,
+        "inputs": [
+          {
+            "index": 0,
+            "dtype": "f32",
+            "shape": [
+              true,
+              4
+            ]
+          },
+          {
+            "index": 1,
+            "dtype": "f32",
+            "shape": [
+              1,
+              4
+            ]
+          }
+        ],
+        "outputs": [
+          {
+            "index": 0,
+            "dtype": "f32",
+            "shape": [
+              true,
+              4
+            ]
+          },
+          {
+            "index": 1,
+            "dtype": "f32",
+            "shape": [
+              1,
+              4
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "schema2-missing-fields",
+      "valid": false,
+      "frame": {
+        "schema_version": 2,
+        "type": "response",
+        "status": "ok"
+      }
+    }
+  ]
+}

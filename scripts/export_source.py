@@ -21,8 +21,8 @@ ROOT_FILES = frozenset({
     'ncs2_multi_client.py', 'ncs2_async.py', 'read_ncs2_usb.py', 'ncs2_device_lock.hpp', 'Package.swift',
 })
 DIRECTORY_SUFFIXES = {
-    'docs': {'.md'}, 'scripts': {'.py', '.sh'},
-    'tests': {'.py'}, 'examples': {'.swift'}, 'swift-tests': {'.swift'},
+    'docs': {'.md', '.json'}, 'scripts': {'.py', '.sh'},
+    'tests': {'.py', '.json'}, 'examples': {'.swift'}, 'swift-tests': {'.swift'},
 }
 SOURCE_DIRECTORY_PATHS = frozenset(
     '/'.join(parts[:index])
@@ -33,11 +33,13 @@ SOURCE_DIRECTORY_PATHS = frozenset(
 REQUIRED_FILES = ROOT_FILES | frozenset({
     'ncs2_openvino_probe.cpp', 'ncs2_json.hpp', 'ncs2_worker.cpp', 'ncs2_multi_worker.cpp',
     'examples/NCS2WorkerClient.swift', 'examples/NCS2MultiWorkerClient.swift',
-    'examples/NCS2Runtime.swift', 'swift-tests/NCS2KitTests.swift', 'swift-tests/NCS2RuntimeTests.swift',
+    'examples/NCS2Runtime.swift', 'swift-tests/ProtocolFixtureTests.swift', 'swift-tests/NCS2KitTests.swift', 'swift-tests/NCS2RuntimeTests.swift',
     'docs/SOURCE_EXPORT.md', 'docs/THIRD_PARTY_REVIEW.md', 'docs/TOOLCHAIN.md',
     'docs/WORKER_API.md', 'docs/ASYNC_SDK.md', 'docs/TOOLCHAIN.zh-CN.md',
     'docs/WORKER_API.zh-CN.md', 'docs/ASYNC_SDK.zh-CN.md',
     'docs/SOURCE_EXPORT.zh-CN.md', 'docs/THIRD_PARTY_REVIEW.zh-CN.md',
+    'docs/worker-protocol.schema.json', 'tests/test_protocol_fixtures.py',
+    'tests/worker_protocol_fixtures.json', 'tests/test_device_lock.py',
     'docs/SOURCE_EXPORT.md', 'tests/test_async_sdk.py', 'tests/test_check_arm64.py', 'tests/test_doctor.py', 'tests/test_export_source.py',
     'tests/test_multi_worker.py', 'tests/test_swift_client.py',
     'tests/test_swift_multi_client.py', 'tests/test_usb_parser.py', 'tests/test_worker.py',
@@ -71,7 +73,7 @@ def allowed_path(name):
     directory, leaf = path.parts
     return (path.suffix in DIRECTORY_SUFFIXES.get(directory, set())
             and not leaf.startswith('.')
-            and (directory != 'tests' or leaf.startswith('test_')))
+            and (directory != 'tests' or (leaf.startswith('test_') or leaf == 'worker_protocol_fixtures.json')))
 
 
 def absolute_path(path):
