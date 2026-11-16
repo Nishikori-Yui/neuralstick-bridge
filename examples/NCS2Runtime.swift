@@ -50,6 +50,17 @@ public struct NCS2TaskResult: Sendable {
     public let inferenceMilliseconds: Double?
 }
 
+public struct NCS2RuntimeStatus: Sendable, Equatable {
+    public let queueDepth: Int
+    public let runningTaskID: UUID?
+    public let runningModel: String?
+    public let workerModel: String?
+    public let deviceOwned: Bool
+    public let registeredModelCount: Int
+    public let closed: Bool
+    public let closing: Bool
+}
+
 /// A handle remains readable after runtime.close(); release() invalidates it.
 public struct NCS2TaskHandle: Sendable {
     public let id: UUID
@@ -85,6 +96,7 @@ private final class NCS2WorkerExecutor: @unchecked Sendable {
     private let timeout: TimeInterval
     private let startupTimeout: TimeInterval
     private let lock: URL
+    private let stateLock = NSLock()
     private var lease: Int32 = -1
     private var session: Session?
     private var loadedModel: NCS2Model?
@@ -117,10 +129,21 @@ private final class NCS2WorkerExecutor: @unchecked Sendable {
                 var failure: NCS2SDKError?
                 do { try self.closeSession() }
                 catch { failure = NCS2SDKError(.protocolError, "Worker shutdown failed: \(error)") }
-                if self.lease >= 0 { Darwin.close(self.lease); self.lease = -1 }
+                self.stateLock.lock()
+                if self.lease >= 0 {
+                    Darwin.close(self.lease)
+                    self.lease = -1
+                }
+                self.stateLock.unlock()
                 continuation.resume(returning: failure)
             }
         }
+    }
+
+    func status() -> (model: String?, deviceOwned: Bool) {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return (loadedModel?.name, lease >= 0)
     }
 
     private func acquire() throws {
@@ -136,14 +159,18 @@ private final class NCS2WorkerExecutor: @unchecked Sendable {
             }
             throw NCS2SDKError(.deviceUnavailable, "Cannot acquire the SDK device lease")
         }
+        stateLock.lock()
         lease = fd
+        stateLock.unlock()
     }
 
     private func closeSession() throws {
         dispatchPrecondition(condition: .onQueue(queue))
         let old = session
         session = nil
+        stateLock.lock()
         loadedModel = nil
+        stateLock.unlock()
         switch old {
         case .single(let client): try client.shutdown()
         case .multi(let client): try client.shutdown()
@@ -159,7 +186,9 @@ private final class NCS2WorkerExecutor: @unchecked Sendable {
         case nil: break
         }
         session = nil
+        stateLock.lock()
         loadedModel = nil
+        stateLock.unlock()
     }
 
     private func perform(model: NCS2Model, inputs: [[Float]]) throws -> NCS2TaskResult {
@@ -177,7 +206,9 @@ private final class NCS2WorkerExecutor: @unchecked Sendable {
                     session = .multi(try NCS2MultiWorkerClient(worker: multiWorker, plugins: plugins, model: model.xml,
                                                              timeout: timeout, startupTimeout: startupTimeout))
                 }
+                stateLock.lock()
                 loadedModel = model
+                stateLock.unlock()
                 } catch {
                     let description = String(describing: error)
                     if description.hasPrefix("device_busy:") {
@@ -271,6 +302,21 @@ public actor NCS2Runtime {
     }
 
     public func registeredModels() -> [NCS2Model] { models.values.sorted { $0.name < $1.name } }
+
+    public func status() async -> NCS2RuntimeStatus {
+        let worker = executor.status()
+        let running = records.first { $0.value.status == .running }
+        return NCS2RuntimeStatus(
+            queueDepth: pending.count,
+            runningTaskID: running?.key,
+            runningModel: running?.value.model.name,
+            workerModel: worker.model,
+            deviceOwned: worker.deviceOwned,
+            registeredModelCount: models.count,
+            closed: closed,
+            closing: closing != nil
+        )
+    }
 
     public func submit(model: String, inputs: [[Float]]) throws -> NCS2TaskHandle {
         try requireOpen()

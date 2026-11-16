@@ -281,4 +281,31 @@ final class NCS2RuntimeTests: XCTestCase {
             XCTAssertEqual(f.trace().filter { $0["event"] as? String == "start" }.count, 1)
         }
     }
+
+    func testRuntimeStatusReportsQueueAndWorkerState() async throws {
+        try await withFixture { f in
+            let runtime = try f.runtime()
+            try await f.register(runtime)
+            let before = await runtime.status()
+            XCTAssertEqual(before.queueDepth, 0)
+            XCTAssertNil(before.runningTaskID)
+            XCTAssertNil(before.workerModel)
+            XCTAssertFalse(before.deviceOwned)
+            XCTAssertEqual(before.registeredModelCount, 1)
+            let task = try await runtime.submit(model: "a", inputs: [[99,0]])
+            try await f.waitForInfer()
+            let end = Date().addingTimeInterval(4)
+            var running = await runtime.status()
+            while running.workerModel != "a" {
+                guard Date() < end else { throw NCS2SDKError(.protocolError, "Status did not observe worker") }
+                try await Task.sleep(for: .milliseconds(5))
+                running = await runtime.status()
+            }
+            XCTAssertEqual(running.runningModel, "a")
+            XCTAssertEqual(running.workerModel, "a")
+            XCTAssertTrue(running.deviceOwned)
+            try f.unblock()
+            _ = try await task.result()
+        }
+    }
 }

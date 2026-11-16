@@ -73,6 +73,8 @@ runtime actor 持有调度和结果状态；独立的串行 I/O executor 负责�
 
 任务状态包括 `queued`、`running`、`succeeded`、`failed` 和 `cancelled`。同一个 runtime 同时只执行一个任务，提交顺序就是执行顺序。
 
+`runtime.status()` 返回一个时间点快照，包括等待队列长度、运行中的任务和模型、已加载的 worker 模型、设备租约状态、已注册模型数量以及关闭状态。它不会访问 USB，也不会强制启动 worker。
+
 默认容量是 **32 个等待任务**，不包含当前运行任务。队列满时立即返回 `queue_full`，不会保留被拒绝的任务。
 
 `cancel()` 只有在成功移除排队任务时返回 true。运行中或终态任务返回 false。取消 `result()` 的等待操作只解除当前等待者，不会终止硬件推理。

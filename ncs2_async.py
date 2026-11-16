@@ -13,6 +13,7 @@ import fcntl
 import math
 import os
 from pathlib import Path
+import threading
 from typing import Sequence
 import uuid
 
@@ -80,6 +81,18 @@ class NCS2Result:
     inference_milliseconds: float | None = None
 
 
+@dataclass(frozen=True)
+class NCS2RuntimeStatus:
+    queue_depth: int
+    running_task_id: str | None
+    running_model: str | None
+    worker_model: str | None
+    device_owned: bool
+    registered_model_count: int
+    closed: bool
+    closing: bool
+
+
 @dataclass
 class _TaskRecord:
     model: NCS2Model
@@ -132,6 +145,12 @@ class _WorkerEngine:
         self.lease = None
         self.client = None
         self.model = None
+        self._state_lock = threading.Lock()
+
+    def status(self) -> tuple[str | None, bool]:
+        with self._state_lock:
+            model = self.model.name if self.model is not None else None
+            return model, self.lease is not None
 
     def _acquire(self):
         if self.lease is not None:
@@ -265,6 +284,26 @@ class NCS2Runtime:
     async def registered_models(self) -> tuple[NCS2Model, ...]:
         self._check_loop()
         return tuple(self._models[name] for name in sorted(self._models))
+
+    async def status(self) -> NCS2RuntimeStatus:
+        """Return a point-in-time snapshot without accessing the device."""
+        self._check_loop()
+        running = next(
+            ((task_id, record.model.name) for task_id, record in self._records.items()
+             if record.status == NCS2TaskStatus.RUNNING),
+            (None, None),
+        )
+        worker_model, device_owned = self._engine.status()
+        return NCS2RuntimeStatus(
+            queue_depth=len(self._queue),
+            running_task_id=running[0],
+            running_model=running[1],
+            worker_model=worker_model,
+            device_owned=device_owned,
+            registered_model_count=len(self._models),
+            closed=self._closed,
+            closing=self._closing is not None,
+        )
 
     async def submit(self, model: str, inputs: Sequence[Sequence[float]]) -> NCS2Task:
         self._open()

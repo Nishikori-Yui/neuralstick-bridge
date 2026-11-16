@@ -234,6 +234,34 @@ class AsyncSDKTests(unittest.IsolatedAsyncioTestCase):
         await (await runtime.submit('a', [[1,2]])).result()
         self.assertEqual(len([row for row in self.trace() if row['event']=='start']), 1)
 
+    async def test_runtime_status_reports_queue_and_worker_state(self):
+        runtime = self.runtime()
+        await self.register(runtime)
+        before = await runtime.status()
+        self.assertEqual(before.queue_depth, 0)
+        self.assertIsNone(before.running_task_id)
+        self.assertIsNone(before.worker_model)
+        self.assertFalse(before.device_owned)
+        self.assertEqual(before.registered_model_count, 1)
+        task = await runtime.submit('a', [[99, 0]])
+        await self.wait_until(lambda: any(row['event'] == 'infer' for row in self.trace()))
+        running = await self.wait_until_status(runtime, task)
+        self.assertEqual(running.running_task_id, task.id)
+        self.assertEqual(running.running_model, 'a')
+        self.assertEqual(running.worker_model, 'a')
+        self.assertTrue(running.device_owned)
+        (self.root / 'gate').touch()
+        await task.result()
+        await task.release()
+
+    async def wait_until_status(self, runtime, task):
+        async with asyncio.timeout(4):
+            while True:
+                status = await runtime.status()
+                if status.running_task_id == task.id and status.worker_model == 'a':
+                    return status
+                await asyncio.sleep(.005)
+
 
 if __name__ == '__main__':
     unittest.main()

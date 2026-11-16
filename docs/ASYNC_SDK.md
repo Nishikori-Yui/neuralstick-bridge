@@ -73,6 +73,8 @@ The runtime actor owns scheduling and result state. A dedicated serial I/O execu
 
 Submit returns a handle with a unique ID and model name. States are queued, running, succeeded, failed and cancelled. Concurrent submissions are serialized in acceptance order; only one task runs.
 
+`runtime.status()` returns a point-in-time snapshot containing waiting queue depth, the running task and model, the loaded worker model, device-lease state, registered model count, and closing state. It does not access USB or force a worker to start.
+
 The default capacity is **32 waiting tasks**, excluding the running task. A smaller capacity can be configured in 1..32. Full queues immediately fail submission with queue_full; nothing is retained for rejected submissions.
 
 `cancel()` returns true only when it removes a queued task. Its state becomes cancelled and result() throws task_cancelled. Cancelling a running/terminal task returns false. Cancelling an async result waiter only detaches that waiter; inference continues and another caller can retrieve its result.
