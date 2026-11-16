@@ -18,7 +18,7 @@ ROOT_FILES = frozenset({
     'README.md', 'THIRD_PARTY_NOTICES.md', 'CONTRIBUTING.md', '.gitignore',
     'README.zh-CN.md',
     'toolchain.lock.json', 'ncs2', 'ncs2_log_run.sh', 'ncs2_client.py',
-    'ncs2_multi_client.py', 'ncs2_async.py', 'read_ncs2_usb.py', 'Package.swift',
+    'ncs2_multi_client.py', 'ncs2_async.py', 'read_ncs2_usb.py', 'ncs2_device_lock.hpp', 'Package.swift',
 })
 DIRECTORY_SUFFIXES = {
     'docs': {'.md'}, 'scripts': {'.py', '.sh'},
@@ -38,11 +38,11 @@ REQUIRED_FILES = ROOT_FILES | frozenset({
     'docs/WORKER_API.md', 'docs/ASYNC_SDK.md', 'docs/TOOLCHAIN.zh-CN.md',
     'docs/WORKER_API.zh-CN.md', 'docs/ASYNC_SDK.zh-CN.md',
     'docs/SOURCE_EXPORT.zh-CN.md', 'docs/THIRD_PARTY_REVIEW.zh-CN.md',
-    'docs/SOURCE_EXPORT.md', 'tests/test_async_sdk.py', 'tests/test_check_arm64.py', 'tests/test_export_source.py',
+    'docs/SOURCE_EXPORT.md', 'tests/test_async_sdk.py', 'tests/test_check_arm64.py', 'tests/test_doctor.py', 'tests/test_export_source.py',
     'tests/test_multi_worker.py', 'tests/test_swift_client.py',
     'tests/test_swift_multi_client.py', 'tests/test_usb_parser.py', 'tests/test_worker.py',
     'scripts/bootstrap.py', 'scripts/build_probe.sh', 'scripts/build_runtime.sh', 'scripts/build_swift_clients.sh',
-    'scripts/check_arm64.py', 'scripts/check_arm64.sh', 'scripts/export_source.py',
+    'scripts/check_arm64.py', 'scripts/check_arm64.sh', 'scripts/doctor.py', 'scripts/export_source.py',
     'scripts/log_run.py', 'scripts/run_probe.sh',
 })
 EXCLUDED = ['vendor', 'third_party', 'build*', 'dist', 'firmware-cache', 'results',

@@ -13,7 +13,6 @@ import fcntl
 import math
 import os
 from pathlib import Path
-import tempfile
 from typing import Sequence
 import uuid
 
@@ -43,6 +42,12 @@ class NCS2SDKError(RuntimeError):
     def __init__(self, code: NCS2ErrorCode, message: str):
         self.code = code
         super().__init__(message)
+
+
+def default_device_lock() -> Path:
+    """Return the lock path shared with the native worker and probe."""
+    configured = os.environ.get("NCS2_DEVICE_LOCK")
+    return Path(configured) if configured else Path("/tmp") / f"neuralstick-bridge-device-{os.getuid()}.lock"
 
 
 class NCS2TaskStatus(str, Enum):
@@ -165,6 +170,10 @@ class _WorkerEngine:
                                   startup_timeout=self.startup_timeout)
                 self.model = model
             except (OSError, NCS2WorkerError) as error:
+                if str(error).startswith("device_busy:"):
+                    raise NCS2SDKError(NCS2ErrorCode.DEVICE_BUSY, str(error)) from error
+                if str(error).startswith("device_unavailable:"):
+                    raise NCS2SDKError(NCS2ErrorCode.DEVICE_UNAVAILABLE, str(error)) from error
                 raise NCS2SDKError(NCS2ErrorCode.MODEL_LOAD_FAILED, str(error)) from error
         try:
             if model.schema == 1:
@@ -215,7 +224,7 @@ class NCS2Runtime:
         if any(type(v) not in (int, float) or not math.isfinite(v) or not 0 < v <= 300
                for v in (timeout, startup_timeout)):
             raise NCS2SDKError(NCS2ErrorCode.INVALID_ARGUMENT, "Timeouts must be in (0,300]")
-        lock = Path(device_lock) if device_lock is not None else Path(tempfile.gettempdir()) / f"ncs2-sdk-{os.getuid()}.lock"
+        lock = Path(device_lock) if device_lock is not None else default_device_lock()
         self._engine = _WorkerEngine(Path(worker).absolute(), Path(multi_worker).absolute(),
                                      Path(plugins).absolute(), timeout, startup_timeout, lock)
         self._capacity = queue_capacity

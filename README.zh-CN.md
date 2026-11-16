@@ -32,12 +32,15 @@ NeuralStick Bridge 将 NCS2 已停止维护的 MYRIAD 运行时桥接到现代 m
 ./ncs2 build
 ./ncs2 build-swift
 ./ncs2 check
+./ncs2 doctor
 ./ncs2 usb
 ./ncs2 list
 ./ncs2 smoke
 ```
 
 `fetch` 下载并校验锁定的 OpenVINO 源码和官方固件归档，内容只保存在本地忽略目录。`build` 生成 arm64 运行时、MYRIAD 插件、IR reader 和命令行探针。`check` 递归验证非系统 Mach-O 文件是否为纯 arm64。
+
+`doctor` 是只读环境检查，会报告主机架构、工具链、锁定的 OpenVINO 状态、运行时文件、固件哈希和本地构建产物，不访问 USB。
 
 设备启动需要本地固件。固件不由本仓库分发；根目录 MIT License 只覆盖本项目原创源码。
 

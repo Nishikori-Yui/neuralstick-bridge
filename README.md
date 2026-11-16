@@ -36,12 +36,15 @@ The build scripts do not install system packages or require sudo.
 ./ncs2 build
 ./ncs2 build-swift
 ./ncs2 check
+./ncs2 doctor
 ./ncs2 usb
 ./ncs2 list
 ./ncs2 smoke
 ```
 
 `fetch` downloads and verifies the pinned OpenVINO source and official firmware archives. They stay in ignored local directories. `build` produces the arm64 runtime, MYRIAD plugin, IR reader, and command-line probe. `check` recursively verifies that non-system Mach-O files are pure arm64.
+
+`doctor` is a read-only environment check. It reports host architecture, tool availability, pinned OpenVINO state, runtime files, firmware hashes and local build outputs without accessing USB.
 
 The local firmware is required to boot the device. It is not distributed by this repository, and the MIT license covers only this project's original source.
 

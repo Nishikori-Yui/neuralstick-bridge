@@ -11,6 +11,7 @@
 
 #include <openvino/openvino.hpp>
 #include <openvino/opsets/opset8.hpp>
+#include "ncs2_device_lock.hpp"
 
 int main(int argc, char** argv) {
     try {
@@ -21,6 +22,7 @@ int main(int argc, char** argv) {
         if (mode != "list" && mode != "smoke" && mode != "bench") {
             throw std::runtime_error("Mode must be list, smoke, or bench.");
         }
+        ncs2::DeviceLock device_lock;
         auto count = [](const char* value, bool allow_zero) {
             const std::string text(value);
             if (text.empty() || text.find_first_not_of("0123456789") != std::string::npos)
@@ -100,6 +102,9 @@ int main(int argc, char** argv) {
                   << ",\"min_ms\":" << timings.front() << ",\"max_ms\":" << timings.back()
                   << ",\"max_abs_error\":" << max_error << "}\n";
         return 0;
+    } catch (const ncs2::DeviceBusy& error) {
+        std::cerr << error.what() << '\n';
+        return 3;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
         return 1;

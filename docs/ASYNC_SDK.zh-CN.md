@@ -83,7 +83,7 @@ runtime actor 持有调度和结果状态；独立的串行 I/O executor 负责�
 
 ## 设备占用与错误
 
-第一个实际执行的任务会获取跨 Python/Swift SDK 共享的 macOS BSD advisory lock。默认锁路径是当前用户临时目录中的 `ncs2-sdk-UID.lock`。不会安装 daemon，也不会使用数据库。
+第一个实际执行的任务会获取跨 Python SDK、Swift SDK、probe 和 native worker 共享的 macOS BSD advisory lock。默认锁路径是 `/tmp/neuralstick-bridge-device-UID.lock`。设置 `NCS2_DEVICE_LOCK`、`device_lock` 或 `deviceLock` 可以选择其他路径。竞争进程会在启动 MYRIAD 会话前收到 `device_busy`。`--validate-only` worker 检查不会获取设备锁。不会安装 daemon，也不会使用数据库。
 
 稳定错误分类包括：
 

@@ -178,7 +178,16 @@ private final class NCS2WorkerExecutor: @unchecked Sendable {
                                                              timeout: timeout, startupTimeout: startupTimeout))
                 }
                 loadedModel = model
-            } catch { throw NCS2SDKError(.modelLoadFailed, String(describing: error)) }
+                } catch {
+                    let description = String(describing: error)
+                    if description.hasPrefix("device_busy:") {
+                        throw NCS2SDKError(.deviceBusy, description)
+                    }
+                    if description.hasPrefix("device_unavailable:") {
+                        throw NCS2SDKError(.deviceUnavailable, description)
+                    }
+                    throw NCS2SDKError(.modelLoadFailed, description)
+                }
         }
         do {
             switch session {
@@ -244,7 +253,7 @@ public actor NCS2Runtime {
             throw NCS2SDKError(.invalidArgument, "Require file URLs, queue capacity 1..32 and timeouts in (0,300]")
         }
         capacity = queueCapacity
-        let lock = deviceLock ?? FileManager.default.temporaryDirectory.appendingPathComponent("ncs2-sdk-\(getuid()).lock")
+        let lock = deviceLock ?? URL(fileURLWithPath: "/tmp/neuralstick-bridge-device-\(getuid()).lock")
         executor = NCS2WorkerExecutor(worker: worker, multiWorker: multiWorker, plugins: plugins,
                                       timeout: timeout, startupTimeout: startupTimeout, lock: lock)
     }

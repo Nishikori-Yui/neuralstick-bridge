@@ -41,6 +41,10 @@ This removes the x86_64 host dependency for the demonstrated inference path. It 
 
 ## Diagnostics
 
+`./ncs2 doctor` performs a read-only preflight without opening USB. It checks the native host, command-line tools, the pinned OpenVINO checkout, runtime libraries, firmware output hashes, expected build products, and the shared device-lock path. Exit 0 means the local toolchain is ready; exit 2 means one or more required checks need attention.
+
+The probe, schema-1 worker, schema-2 worker, and async SDK use the same nonblocking advisory lock. Set `NCS2_DEVICE_LOCK` to select an alternate lock file when coordinating multiple processes. A second NeuralStick Bridge process reports `device_busy` and does not start a MYRIAD session. `--validate-only` worker checks do not acquire the device lock.
+
 - Exit 0 means the requested checks passed. Exit 2 means no MYRIAD device, missing runtime or probe, or no usable matching USB device. Other nonzero codes report build or validation failures.
 - `NCS2_LOG_LEVEL=LOG_DEBUG ./ncs2 smoke` sets the plugin's public log level. This revision supports `LOG_NONE`, `LOG_ERROR`, `LOG_WARNING`, `LOG_INFO`, `LOG_DEBUG`, and `LOG_TRACE`.
 - `./ncs2 usb --show-serial` is an explicit local-only diagnostic option; serial numbers are hidden by default.

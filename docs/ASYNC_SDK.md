@@ -83,9 +83,9 @@ Results and task errors stay in runtime memory until `release()`. Multiple reads
 
 ## Device ownership and failures
 
-The first executing task acquires a nonblocking BSD advisory lock shared by both SDKs at the per-user temporary path `ncs2-sdk-UID.lock`. The lease lasts until runtime close. Its file has no model/task metadata and remains in place to preserve lock identity. The kernel releases the lease when the owning process exits. device_lock / deviceLock can select a common alternative path.
+The first executing task acquires a nonblocking BSD advisory lock shared by the Python SDK, Swift SDK, probe, and native workers at `/tmp/neuralstick-bridge-device-UID.lock`. The lease lasts until runtime close. Its file has no model/task metadata and remains in place to preserve lock identity. The kernel releases the lease when the owning process exits. `NCS2_DEVICE_LOCK`, `device_lock`, or `deviceLock` can select a common alternative path.
 
-This coordinates SDK runtimes using the same lock path. Synchronous clients and external OpenVINO applications do not participate; close those device users while the SDK owns the NCS2. No daemon or database is installed.
+This coordinates the public NeuralStick Bridge entry points using the same lock path. A competing process receives `device_busy` before it starts a MYRIAD session. `--validate-only` worker checks do not acquire the lock. No daemon or database is installed.
 
 Errors expose a stable category through Python NCS2SDKError.code or Swift NCS2SDKError.Code:
 

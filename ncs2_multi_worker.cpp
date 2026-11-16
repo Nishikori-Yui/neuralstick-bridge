@@ -14,6 +14,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "ncs2_device_lock.hpp"
 
 namespace fs = std::filesystem;
 using J = ncs2json::Value;
@@ -181,6 +182,8 @@ int main(int argc, char** argv) {
         if (!validate_only && (argc != 4 || std::string(argv[2]) != "--model"))
             throw std::runtime_error("Usage: ncs2_multi_worker PLUGINS --model XML | --validate-only");
         const std::string case_id = validate_only ? "validation" : fs::path(argv[3]).stem().string();
+        std::unique_ptr<ncs2::DeviceLock> device_lock;
+        if (!validate_only) device_lock = std::make_unique<ncs2::DeviceLock>();
         std::vector<TensorSpec> inputs;
         std::vector<TensorSpec> outputs;
         ov::Core core;
@@ -297,6 +300,9 @@ int main(int argc, char** argv) {
             }
         }
         return 0;
+    } catch (const ncs2::DeviceBusy& error) {
+        std::cerr << error.what() << '\n';
+        return 3;
     } catch (const std::exception& error) {
         std::cerr << "multi-worker: " << error.what() << std::endl;
         return 1;

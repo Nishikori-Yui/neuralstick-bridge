@@ -13,6 +13,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "ncs2_device_lock.hpp"
 namespace fs = std::filesystem;
 using J=ncs2json::Value;
 constexpr size_t frame_limit=1024*1024;
@@ -94,6 +95,8 @@ int main(int argc,char** argv){
         if(!validate_only&&(argc!=4||std::string(argv[2])!="--model"))
             throw std::runtime_error("Usage: ncs2_worker PLUGINS --model XML | --validate-only");
         const std::string case_id=validate_only?"validation":fs::path(argv[3]).stem().string();
+        std::unique_ptr<ncs2::DeviceLock> device_lock;
+        if(!validate_only) device_lock=std::make_unique<ncs2::DeviceLock>();
         ov::Shape input_shape{1,4},output_shape{1,4};
         ov::Core core;ov::CompiledModel compiled;ov::InferRequest request;size_t completed=0;
         if(!validate_only){
@@ -150,5 +153,6 @@ int main(int argc,char** argv){
             }catch(const std::exception& e){error_response(id,e.what(),fatal);if(fatal)return 1;}
         }
         return 0;
+    }catch(const ncs2::DeviceBusy& e){std::cerr<<"worker: "<<e.what()<<std::endl;return 3;
     }catch(const std::exception& e){std::cerr<<"worker: "<<e.what()<<std::endl;return 1;}
 }
