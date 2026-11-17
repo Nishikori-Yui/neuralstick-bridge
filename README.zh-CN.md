@@ -13,6 +13,7 @@ NeuralStick Bridge 将 NCS2 已停止维护的 MYRIAD 运行时桥接到现代 m
 - 版本化的 schema 1 和 schema 2 JSON-lines worker 协议。
 - 同步 Python/Swift 客户端，以及有界异步 Python/Swift SDK 门面。
 - 只读 USB 描述符读取和递归 arm64 依赖闭包审计。
+- 离线 IR 模型检查和机器可读的 worker 能力矩阵。
 
 项目面向应用集成和设备访问。复现套件、长时间 soak、性能实验室、生命周期追踪和摄像头集成不属于公开工具链。
 
@@ -33,6 +34,8 @@ NeuralStick Bridge 将 NCS2 已停止维护的 MYRIAD 运行时桥接到现代 m
 ./ncs2 build-swift
 ./ncs2 check
 ./ncs2 doctor
+./ncs2 capabilities
+./ncs2 inspect --model path/to/model.xml
 ./ncs2 usb
 ./ncs2 list
 ./ncs2 smoke
@@ -42,11 +45,13 @@ NeuralStick Bridge 将 NCS2 已停止维护的 MYRIAD 运行时桥接到现代 m
 
 `doctor` 是只读环境检查，会报告主机架构、工具链、锁定的 OpenVINO 状态、运行时文件、固件哈希和本地构建产物，不访问 USB。
 
+`capabilities` 输出 worker 的静态 f32、shape、端口数、帧大小和队列限制。`inspect` 使用原生 runtime 读取 OpenVINO IR 并报告 schema 兼容性，不打开 USB，也不针对 MYRIAD 编译模型。
+
 设备启动需要本地固件。固件不由本仓库分发；根目录 MIT License 只覆盖本项目原创源码。
 
 ## 工作原理
 
-现代应用不会直接链接旧版 OpenVINO ABI。Python 或 Swift 客户端启动原生 C++ worker，worker 为 `MYRIAD` 加载并编译 IR 模型，两个进程通过 stdin/stdout 交换有界 JSON-lines。异步 SDK 在这一协议之上提供模型注册、FIFO 调度、任务状态、排队任务取消、结果保留和 worker 复用。
+现代应用不会直接链接旧版 OpenVINO ABI。Python 或 Swift 客户端启动原生 C++ worker，worker 为 `MYRIAD` 加载并编译 IR 模型，两个进程通过 stdin/stdout 交换有界 JSON-lines。异步 SDK 在这一协议之上提供模型注册、FIFO 调度、任务状态、排队任务取消、有界结果保留、worker 复用和 runtime 指标。
 
 这样可以让现代应用层保持当前语言和运行时，同时把设备专用运行时和固件处理留在 macOS 工具链中。
 
@@ -63,6 +68,8 @@ schema 1 支持一个静态 f32 输入和一个静态 f32 输出。schema 2 支�
 
 - [Worker API](docs/WORKER_API.zh-CN.md)
 - [异步 SDK](docs/ASYNC_SDK.zh-CN.md)
+- [模型能力与检查](docs/CAPABILITIES.zh-CN.md)
+- [无摄像头性能工作负载](docs/PERFORMANCE_WORKLOADS.zh-CN.md)
 
 ## Swift 与 Python SDK
 
@@ -77,6 +84,8 @@ schema 1 支持一个静态 f32 输入和一个静态 f32 输出。schema 2 支�
 - 相邻任务的 worker 复用；
 - 模型切换时按队列顺序关闭和启动 worker；
 - 稳定的错误分类。
+- `runtime.status()` 提供任务、worker、模型切换、耗时和结果保留指标。
+- 可选的结果数量和元素上限；超限后按顺序淘汰最早结果。
 
 运行中的硬件推理不能取消。调用方取消的是等待操作，设备推理仍会完成。
 
@@ -99,6 +108,8 @@ python -m pip install .
 - `ncs2_worker.cpp`、`ncs2_multi_worker.cpp`：schema 1/2 worker。
 - `ncs2_client.py`、`ncs2_multi_client.py`：同步 Python 客户端。
 - `ncs2_async.py`：异步 Python SDK。
+- `ncs2_model.py`、`ncs2_capabilities.py`：Python 模型检查 API 和能力矩阵。
+- `ncs2_model_inspect.cpp`：离线原生 IR 读取器，不访问 USB。
 - `Sources/NCS2Kit/`：Swift SDK 库源码。
 - `Examples/`：独立 Swift CLI 示例。
 - `Tests/NCS2KitTests/`：Swift 包测试。
@@ -111,6 +122,8 @@ python -m pip install .
 ## 文档
 
 - [工具链说明](docs/TOOLCHAIN.zh-CN.md)
+- [模型能力与检查](docs/CAPABILITIES.zh-CN.md)
+- [无摄像头性能工作负载](docs/PERFORMANCE_WORKLOADS.zh-CN.md)
 - [Worker API](docs/WORKER_API.zh-CN.md)
 - [异步 SDK](docs/ASYNC_SDK.zh-CN.md)
 - [源码导出](docs/SOURCE_EXPORT.zh-CN.md)

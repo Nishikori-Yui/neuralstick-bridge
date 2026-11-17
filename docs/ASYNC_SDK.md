@@ -24,6 +24,8 @@ async def main():
         worker=Path("build-arm64/ncs2_worker"),
         multi_worker=Path("build-arm64/ncs2_multi_worker"),
         plugins=Path("vendor/openvino-2022.3/bin/arm64/Release/plugins.xml"),
+        max_retained_results=64,
+        max_retained_elements=65536,
     ) as runtime:
         await runtime.register_model("classifier", Path("models/classifier.xml"), schema=2)
         handle = await runtime.submit("classifier", [[0.0] * 128])
@@ -83,11 +85,13 @@ Submit returns a handle with a unique ID and model name. States are queued, runn
 
 `runtime.status()` returns a point-in-time snapshot containing waiting queue depth, the running task and model, the loaded worker model, device-lease state, registered model count, and closing state. It does not access USB or force a worker to start.
 
+The snapshot's `metrics` include submitted, successful, failed and cancelled task counts; worker starts and model switches; last and cumulative task time; last and cumulative native inference time; and retained result count/elements. Task time begins when the FIFO runner starts the task and includes worker startup, model loading/compilation, protocol handling and inference, but excludes queue wait. Inference time is measured natively around `start_async()` and `wait_for()`.
+
 The default capacity is **32 waiting tasks**, excluding the running task. A smaller capacity can be configured in 1..32. Full queues immediately fail submission with queue_full; nothing is retained for rejected submissions.
 
 `cancel()` returns true only when it removes a queued task. Its state becomes cancelled and result() throws task_cancelled. Cancelling a running/terminal task returns false. Cancelling an async result waiter only detaches that waiter; inference continues and another caller can retrieve its result.
 
-Results and task errors stay in runtime memory until `release()`. Multiple reads are supported. Release is valid only for terminal tasks and invalidates the handle, including status queries. Later accesses fail with result_released; releasing a queued/running task fails with task_not_finished. Returned values remain owned by the application. Release handles you no longer need to keep retained output memory bounded.
+Results and task errors stay in runtime memory until `release()`. Multiple reads are supported. `max_retained_results` and `max_retained_elements` are optional limits, both unlimited by default. When either limit is exceeded, the runtime evicts the oldest retained successful result until the limits are met. Its task remains terminal, but `result()` returns `result_expired`; `release()` still frees the handle. These limits cover data retained by the runtime, not result values already returned to application code. Explicitly release handles you no longer need.
 
 `close()` is idempotent. It rejects new work, cancels queued tasks, waits for active inference, shuts down/reaps the worker and releases the device lease. Caller cancellation cannot abandon cleanup. Completed results remain accessible after close until released. Python context cleanup preserves exceptions from the context body. Explicit close is required; Python callers should prefer async with.
 
@@ -108,14 +112,14 @@ Errors expose a stable category through Python NCS2SDKError.code or Swift NCS2SD
 | protocol_error | Invalid/truncated response, transport deadline or lifecycle failure. Broken workers are reaped; the next task can restart. |
 | inference_failed | Valid worker error response. Nonfatal responses keep the worker; fatal responses reap it. Inference is never automatically retried. |
 | unknown_model / model_exists | Correct model registration/name. |
-| task_cancelled / task_not_finished / result_released | Task handle lifecycle or queue cancellation. |
+| task_cancelled / task_not_finished / result_released / result_expired | Task handle lifecycle, queue cancellation or retention eviction. |
 | closed | Create another runtime for new work. |
 
-Only schema 1 reports an inference timer. Python inference_milliseconds and Swift inferenceMilliseconds are absent/nil for schema 2. Queue wait and model compilation/switching are excluded from this timer.
+Both schema 1 and schema 2 report `inference_milliseconds` / `inferenceMilliseconds`, measured from `start_async()` through `wait_for()`. Queue wait, model compilation/switching, JSON encoding and output serialization are excluded from this timer. Existing schema-2 clients tolerate older workers whose response has no `infer_ms`; those clients return a nil timer for that response.
 
 ## Compatibility and checks
 
-The worker protocols are unchanged. Existing Python and Swift synchronous clients remain available. Python fatal responses now use NCS2FatalError, still a subclass of NCS2WorkerError. Swift keeps NCS2ClientError and adds isFatalResponse. These classify failure without parsing vendor message text.
+The worker schema versions remain 1 and 2. Schema 2 inference responses now include `infer_ms`; clients accept older schema-2 responses without it. Existing Python and Swift synchronous clients remain available. Python fatal responses use NCS2FatalError, still a subclass of NCS2WorkerError. Swift keeps NCS2ClientError and adds isFatalResponse. These classify failure without parsing vendor message text.
 
 ```sh
 python3 -B -m unittest discover -s python/tests -p test_async_sdk.py -v

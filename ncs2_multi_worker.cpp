@@ -265,15 +265,19 @@ int main(int argc, char** argv) {
                     std::copy(message.inputs[i].begin(), message.inputs[i].end(),
                               tensor.data<float>());
                 }
+                const auto inference_start = std::chrono::steady_clock::now();
                 request.start_async();
                 if (!request.wait_for(std::chrono::seconds(10)))
                     throw std::runtime_error("Inference timeout; parent must reap worker.");
+                const double inference_ms = std::chrono::duration<double, std::milli>(
+                    std::chrono::steady_clock::now() - inference_start).count();
                 std::ostringstream response;
                 response << std::setprecision(9);
                 response << "{\"schema_version\":2,\"type\":\"response\",\"request_id\":"
                           << json_quote(id) << ",\"status\":\"ok\",\"case\":"
                           << json_quote(case_id)
-                          << ",\"hardware_executed\":true,\"outputs\":[";
+                          << ",\"hardware_executed\":true,\"infer_ms\":" << inference_ms
+                          << ",\"outputs\":[";
                 for (size_t i = 0; i < outputs.size(); ++i) {
                     if (i) response << ',';
                     const auto tensor = request.get_output_tensor(i);

@@ -12,16 +12,20 @@ class PythonPackageTests(unittest.TestCase):
     def test_facade_exports_the_original_sdk_types(self):
         sys.path.insert(0, str(ROOT / "python"))
         self.addCleanup(sys.path.remove, str(ROOT / "python"))
-        from neuralstick_bridge import NCS2Runtime, NCS2Worker, NCS2MultiWorker
+        from neuralstick_bridge import (NCS2Runtime, NCS2Worker, NCS2MultiWorker,
+                                        NCS2ModelInspector, NCS2RuntimeMetrics, capabilities)
         from ncs2_async import NCS2Runtime as Runtime
         from ncs2_client import NCS2Worker as Worker
         from ncs2_multi_client import NCS2MultiWorker as MultiWorker
         self.assertIs(NCS2Runtime, Runtime)
         self.assertIs(NCS2Worker, Worker)
         self.assertIs(NCS2MultiWorker, MultiWorker)
+        self.assertTrue(callable(capabilities))
+        self.assertIsNotNone(NCS2ModelInspector)
+        self.assertIsNotNone(NCS2RuntimeMetrics)
 
     def test_package_selects_only_sdk_modules(self):
         config = tomllib.loads((ROOT / "pyproject.toml").read_text())
         self.assertEqual(set(config["tool"]["setuptools"]["py-modules"]),
-                         {"ncs2_client", "ncs2_multi_client", "ncs2_async"})
+                         {"ncs2_client", "ncs2_multi_client", "ncs2_async", "ncs2_model", "ncs2_capabilities"})
         self.assertNotIn("dependencies", config["project"])

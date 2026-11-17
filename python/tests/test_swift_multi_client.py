@@ -245,6 +245,9 @@ class SwiftMultiClientTests(unittest.TestCase):
             with self.subTest(mutation=mutation):
                 self.assert_failure(self.fake(response="if op=='infer': "+mutation))
 
+    def test_negative_inference_timer_reaps_worker(self):
+        self.assert_failure(self.fake(response="if op=='infer': response['infer_ms']=-1.0"))
+
     def test_timeouts_and_sigterm_ignored_process_are_reaped(self):
         for mode in ('startup-timeout','request-timeout','ignore-term','shutdown-timeout'):
             with self.subTest(mode=mode): self.assert_failure(self.fake(mode=mode),'deadline expired')

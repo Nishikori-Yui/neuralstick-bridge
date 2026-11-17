@@ -55,6 +55,7 @@ private struct NCS2MultiResponse: Decodable {
     let `case`: String?
     let hardware_executed: Bool?
     let completed: Int?
+    let infer_ms: Double?
     let outputs: [NCS2MultiOutput]?
     let fatal: Bool?
     let error: String?
@@ -72,6 +73,7 @@ public final class NCS2MultiWorkerClient {
     private let timeout: TimeInterval
     private let exitTimeout: TimeInterval
     public private(set) var ready: NCS2MultiReady?
+    public private(set) var lastInferenceMilliseconds: Double?
 
     public init(worker: URL, plugins: URL, model: URL, timeout: TimeInterval = 15,
                 startupTimeout: TimeInterval = 30, exitTimeout: TimeInterval = 3,
@@ -240,7 +242,8 @@ public final class NCS2MultiWorkerClient {
         let value = try request("infer", inputs: inputs)
         do {
             guard value.hardware_executed == true, let outputs = value.outputs,
-                  outputs.count == ready.outputs.count else {
+                  outputs.count == ready.outputs.count,
+                  value.infer_ms.map({ $0.isFinite && $0 >= 0 }) ?? true else {
                 throw NCS2ClientError("Invalid multi-worker output count or execution flag")
             }
             for (descriptor, output) in zip(ready.outputs, outputs) {
@@ -251,6 +254,7 @@ public final class NCS2MultiWorkerClient {
                 }
             }
             completed += 1
+            lastInferenceMilliseconds = value.infer_ms
             return outputs
         } catch {
             throw cleaningUp(error)

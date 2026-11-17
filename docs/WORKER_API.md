@@ -2,7 +2,7 @@
 
 The native arm64 C++ workers own the pinned MYRIAD runtime and compiled graph. Python and Swift clients exchange UTF-8 JSON lines over pipes and do not load OpenVINO into their own processes. This is a local API, not a network service.
 
-Applications that need async model/task scheduling can use the [async SDK](ASYNC_SDK.md). The wire protocols below remain unchanged.
+Applications that need async model/task scheduling can use the [async SDK](ASYNC_SDK.md). The schemas remain versioned; schema 2 inference responses now include the native `infer_ms` timing field.
 
 ## Starting a worker
 
@@ -37,7 +37,9 @@ A schema-2 inference uses an `inputs` array with one `{index,dtype,shape,data}` 
 {"schema_version":2,"request_id":"a4","operation":"infer","inputs":[{"index":0,"dtype":"f32","shape":[1,4],"data":[1,2,3,4]}]}
 ```
 
-A successful inference echoes the request identity and returns `hardware_executed:true`, the output shape and dtype, elapsed milliseconds, and the output data. Health and shutdown report the completed inference count. Invalid requests return `status:"error"` with `fatal:false`; runtime or device failures are fatal and terminate the worker.
+A successful inference echoes the request identity and returns `hardware_executed:true`, output descriptors and data, and `infer_ms`. The timer is measured by the native worker from `start_async()` through `wait_for()` using a monotonic clock; it excludes JSON encoding and output serialization. Health and shutdown report the completed inference count. Invalid requests return `status:"error"` with `fatal:false`; runtime or device failures are fatal and terminate the worker.
+
+Schema-2 clients accept older worker responses without `infer_ms` and expose no timer for those responses.
 
 Frames are limited to 1 MiB, nesting to 8 levels, and individual tensors to 16,384 elements. Duplicate keys, invalid Unicode, unknown fields, wrong versions, and shape or type mismatches are rejected.
 

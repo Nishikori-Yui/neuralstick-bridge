@@ -36,6 +36,7 @@ for line in sys.stdin:
     response=dict(schema_version=schema,type='response',request_id=req['request_id'],status='ok',
                   case=model,completed=completed,hardware_executed=False)
     if req['operation']=='infer':
+        response['infer_ms']=.5
         values=req['input']['data'] if schema==1 else req['inputs'][0]['data']
         first=values[0]
         trace('infer',value=first)
@@ -75,10 +76,10 @@ class AsyncSDKTests(unittest.IsolatedAsyncioTestCase):
             await runtime.close()
         self.temporary.cleanup()
 
-    def runtime(self, capacity=32):
+    def runtime(self, capacity=32, **options):
         runtime = NCS2Runtime(worker=self.root/'worker1', multi_worker=self.root/'worker2',
                               plugins=self.root/'plugins.xml', queue_capacity=capacity,
-                              timeout=3, startup_timeout=3, device_lock=self.root/'device.lock')
+                              timeout=3, startup_timeout=3, device_lock=self.root/'device.lock', **options)
         self.runtimes.append(runtime)
         return runtime
 
@@ -108,7 +109,7 @@ class AsyncSDKTests(unittest.IsolatedAsyncioTestCase):
         results = [await task.result() for task in tasks]
         self.assertEqual([result.outputs[0].data[0] for result in results], [1, 2, 13, 4])
         self.assertEqual(results[0].inference_milliseconds, .5)
-        self.assertIsNone(results[2].inference_milliseconds)
+        self.assertEqual(results[2].inference_milliseconds, .5)
         await runtime.close()
         events = self.trace()
         self.assertEqual([row['model'] for row in events if row['event']=='start'], ['a','b','a'])
@@ -261,6 +262,60 @@ class AsyncSDKTests(unittest.IsolatedAsyncioTestCase):
         (self.root / 'gate').touch()
         await task.result()
         await task.release()
+
+    async def test_runtime_metrics_count_tasks_worker_reuse_and_switches(self):
+        runtime = self.runtime()
+        await self.register(runtime, 'a')
+        await self.register(runtime, 'b')
+        for model in ('a', 'a', 'b'):
+            task = await runtime.submit(model, [[1, 2]])
+            await task.result()
+            await task.release()
+        failed = await runtime.submit('a', [[-2, 0]])
+        await self.assert_code(Code.INFERENCE_FAILED, failed.result())
+        await failed.release()
+        queued = await runtime.submit('a', [[99, 0]])
+        await self.wait_until(lambda: any(row['event'] == 'infer' and row['value'] == 99
+                                         for row in self.trace()))
+        cancelled = await runtime.submit('a', [[1, 2]])
+        self.assertTrue(await cancelled.cancel())
+        await cancelled.release()
+        (self.root/'gate').touch()
+        await queued.result()
+        state = await runtime.status()
+        metrics = state.metrics
+        self.assertEqual((metrics.submitted_tasks, metrics.completed_tasks,
+                          metrics.failed_tasks, metrics.cancelled_tasks), (6, 4, 1, 1))
+        self.assertEqual((metrics.worker_start_count, metrics.model_switch_count), (4, 2))
+        self.assertEqual(metrics.retained_result_count, 1)
+        self.assertGreater(metrics.total_task_milliseconds, 0)
+        self.assertGreaterEqual(metrics.last_task_milliseconds, 0)
+
+    async def test_result_retention_limits_evict_oldest_with_stable_error(self):
+        runtime = self.runtime(max_retained_results=1, max_retained_elements=2)
+        await self.register(runtime)
+        first = await runtime.submit('a', [[1, 2]])
+        await first.result()
+        second = await runtime.submit('a', [[3, 4]])
+        await second.result()
+        await self.assert_code(Code.RESULT_EXPIRED, first.result())
+        self.assertEqual((await second.result()).outputs[0].data, (3, 4))
+        state = await runtime.status()
+        self.assertEqual(state.metrics.retained_result_count, 1)
+        self.assertEqual(state.metrics.retained_result_elements, 2)
+        await first.release()
+        await second.release()
+        state = await runtime.status()
+        self.assertEqual(state.metrics.retained_result_count, 0)
+        self.assertEqual(state.metrics.retained_result_elements, 0)
+
+    async def test_retention_configuration_validation(self):
+        for options in ({'max_retained_results': -1}, {'max_retained_results': True},
+                        {'max_retained_elements': -1}, {'max_retained_elements': 1.5}):
+            with self.subTest(options=options):
+                with self.assertRaises(NCS2SDKError) as caught:
+                    self.runtime(**options)
+                self.assertEqual(caught.exception.code, Code.INVALID_ARGUMENT)
 
     async def test_status_after_failure_release_and_close(self):
         runtime = self.runtime()

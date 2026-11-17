@@ -106,6 +106,17 @@ for line in sys.stdin:
                     client.infer([[1, 2, 3, 4], [4, 3, 2, 1]])
                 self.assertIsNotNone(client.process.poll())
 
+    def test_negative_inference_timer_terminates_worker(self):
+        for value in ("-0.1", "10**400"):
+            with self.subTest(value=value), tempfile.TemporaryDirectory() as directory:
+                model = Path(directory) / "model.xml"
+                model.write_text("")
+                behavior = '    if req["operation"]=="infer": response["infer_ms"]=' + value + '\n'
+                client = NCS2MultiWorker(self.fake(directory, behavior), Path("unused"), model)
+                with self.assertRaises(NCS2WorkerError):
+                    client.infer([[1, 2, 3, 4], [4, 3, 2, 1]])
+                self.assertIsNotNone(client.process.poll())
+
     def test_oversized_response_frame_terminates_worker(self):
         with tempfile.TemporaryDirectory() as directory:
             model = Path(directory) / "model.xml"

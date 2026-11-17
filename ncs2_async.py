@@ -14,6 +14,7 @@ import math
 import os
 from pathlib import Path
 import threading
+import time
 from typing import Sequence
 import uuid
 
@@ -34,6 +35,7 @@ class NCS2ErrorCode(str, Enum):
     TASK_CANCELLED = "task_cancelled"
     TASK_NOT_FINISHED = "task_not_finished"
     RESULT_RELEASED = "result_released"
+    RESULT_EXPIRED = "result_expired"
     CLOSED = "closed"
 
 
@@ -82,6 +84,22 @@ class NCS2Result:
 
 
 @dataclass(frozen=True)
+class NCS2RuntimeMetrics:
+    submitted_tasks: int
+    completed_tasks: int
+    failed_tasks: int
+    cancelled_tasks: int
+    worker_start_count: int
+    model_switch_count: int
+    last_task_milliseconds: float | None
+    total_task_milliseconds: float
+    last_inference_milliseconds: float | None
+    total_inference_milliseconds: float
+    retained_result_count: int
+    retained_result_elements: int
+
+
+@dataclass(frozen=True)
 class NCS2RuntimeStatus:
     queue_depth: int
     running_task_id: str | None
@@ -92,16 +110,22 @@ class NCS2RuntimeStatus:
     closed: bool
     closing: bool
     last_error: NCS2SDKError | None
+    metrics: NCS2RuntimeMetrics
+    max_retained_results: int | None
+    max_retained_elements: int | None
 
 
 @dataclass
 class _TaskRecord:
+    task_id: str
     model: NCS2Model
     inputs: tuple[tuple[float, ...], ...]
     status: NCS2TaskStatus = NCS2TaskStatus.QUEUED
     completed: asyncio.Future = field(default_factory=lambda: asyncio.get_running_loop().create_future())
     result: NCS2Result | None = None
     error: NCS2SDKError | None = None
+    retention_expired: bool = False
+    retained_elements: int = 0
 
 
 class NCS2Task:
@@ -117,7 +141,12 @@ class NCS2Task:
 
     async def result(self) -> NCS2Result:
         record = self._runtime._record(self.id)
-        result, error = await asyncio.shield(record.completed)
+        await asyncio.shield(record.completed)
+        record = self._runtime._record(self.id)
+        if record.retention_expired:
+            raise NCS2SDKError(NCS2ErrorCode.RESULT_EXPIRED,
+                               "The result was evicted by the runtime retention policy")
+        result, error = record.result, record.error
         if error is not None:
             # A fresh exception prevents retained outcomes from capturing caller
             # tracebacks (and their application buffers) on repeated reads.
@@ -147,11 +176,17 @@ class _WorkerEngine:
         self.client = None
         self.model = None
         self._state_lock = threading.Lock()
+        self._worker_start_count = 0
+        self._model_switch_count = 0
 
     def status(self) -> tuple[str | None, bool]:
         with self._state_lock:
             model = self.model.name if self.model is not None else None
             return model, self.lease is not None
+
+    def metrics(self) -> tuple[int, int]:
+        with self._state_lock:
+            return self._worker_start_count, self._model_switch_count
 
     def _acquire(self):
         if self.lease is not None:
@@ -181,6 +216,7 @@ class _WorkerEngine:
     def execute(self, model, inputs):
         self._acquire()
         if self.model != model:
+            previous_model, _ = self.status()
             try:
                 self._close_client()
             except (OSError, NCS2WorkerError) as error:
@@ -193,6 +229,9 @@ class _WorkerEngine:
                                   environment={**os.environ, "NCS2_DEVICE_LOCK": str(self.lock_path)})
                 with self._state_lock:
                     self.model = model
+                    self._worker_start_count += 1
+                    if previous_model is not None:
+                        self._model_switch_count += 1
             except (OSError, NCS2WorkerError) as error:
                 if str(error).startswith("device_busy:"):
                     raise NCS2SDKError(NCS2ErrorCode.DEVICE_BUSY, str(error)) from error
@@ -208,7 +247,8 @@ class _WorkerEngine:
                                                         tuple(value["output"])),), value["infer_ms"])
             value = self.client.infer(inputs)
             return NCS2Result(model.name, tuple(NCS2Output(item["index"], tuple(item["shape"]),
-                                                         tuple(item["data"])) for item in value["outputs"]))
+                                                         tuple(item["data"])) for item in value["outputs"]),
+                               value.get("infer_ms"))
         except ValueError as error:
             raise NCS2SDKError(NCS2ErrorCode.INVALID_ARGUMENT, str(error)) from error
         except NCS2RemoteError as error:
@@ -243,19 +283,41 @@ class NCS2Runtime:
 
     def __init__(self, *, worker: Path, multi_worker: Path, plugins: Path,
                  queue_capacity: int = 32, timeout: float = 15, startup_timeout: float = 30,
-                 device_lock: Path | None = None):
+                 device_lock: Path | None = None, max_retained_results: int | None = None,
+                 max_retained_elements: int | None = None):
         if type(queue_capacity) is not int or not 1 <= queue_capacity <= 32:
             raise NCS2SDKError(NCS2ErrorCode.INVALID_ARGUMENT, "queue_capacity must be in 1..32")
         if any(type(v) not in (int, float) or not math.isfinite(v) or not 0 < v <= 300
                for v in (timeout, startup_timeout)):
             raise NCS2SDKError(NCS2ErrorCode.INVALID_ARGUMENT, "Timeouts must be in (0,300]")
+        if (max_retained_results is not None and
+                (type(max_retained_results) is not int or not 0 <= max_retained_results <= 100_000)):
+            raise NCS2SDKError(NCS2ErrorCode.INVALID_ARGUMENT,
+                               "max_retained_results must be None or an integer in 0..100000")
+        if (max_retained_elements is not None and
+                (type(max_retained_elements) is not int or not 0 <= max_retained_elements <= 2**31 - 1)):
+            raise NCS2SDKError(NCS2ErrorCode.INVALID_ARGUMENT,
+                               "max_retained_elements must be None or an integer in 0..2147483647")
         lock = Path(device_lock) if device_lock is not None else default_device_lock()
         self._engine = _WorkerEngine(Path(worker).absolute(), Path(multi_worker).absolute(),
                                      Path(plugins).absolute(), timeout, startup_timeout, lock)
         self._capacity = queue_capacity
+        self._max_retained_results = max_retained_results
+        self._max_retained_elements = max_retained_elements
         self._models: dict[str, NCS2Model] = {}
         self._records: dict[str, _TaskRecord] = {}
         self._queue: deque[str] = deque()
+        self._terminal_order: deque[str] = deque()
+        self._retained_result_count = 0
+        self._retained_result_elements = 0
+        self._submitted_tasks = 0
+        self._completed_tasks = 0
+        self._failed_tasks = 0
+        self._cancelled_tasks = 0
+        self._last_task_milliseconds = None
+        self._total_task_milliseconds = 0.0
+        self._last_inference_milliseconds = None
+        self._total_inference_milliseconds = 0.0
         self._runner = None
         self._closing = None
         self._closed = False
@@ -301,6 +363,7 @@ class NCS2Runtime:
             (None, None),
         )
         worker_model, device_owned = self._engine.status()
+        worker_start_count, model_switch_count = self._engine.metrics()
         return NCS2RuntimeStatus(
             queue_depth=len(self._queue),
             running_task_id=running[0],
@@ -312,6 +375,22 @@ class NCS2Runtime:
             closing=self._closing is not None and not self._closing.done(),
             last_error=(NCS2SDKError(self._last_error.code, str(self._last_error))
                         if self._last_error is not None else None),
+            metrics=NCS2RuntimeMetrics(
+                submitted_tasks=self._submitted_tasks,
+                completed_tasks=self._completed_tasks,
+                failed_tasks=self._failed_tasks,
+                cancelled_tasks=self._cancelled_tasks,
+                worker_start_count=worker_start_count,
+                model_switch_count=model_switch_count,
+                last_task_milliseconds=self._last_task_milliseconds,
+                total_task_milliseconds=self._total_task_milliseconds,
+                last_inference_milliseconds=self._last_inference_milliseconds,
+                total_inference_milliseconds=self._total_inference_milliseconds,
+                retained_result_count=self._retained_result_count,
+                retained_result_elements=self._retained_result_elements,
+            ),
+            max_retained_results=self._max_retained_results,
+            max_retained_elements=self._max_retained_elements,
         )
 
     async def submit(self, model: str, inputs: Sequence[Sequence[float]]) -> NCS2Task:
@@ -340,8 +419,9 @@ class NCS2Runtime:
         except (TypeError, ValueError, OverflowError) as error:
             raise NCS2SDKError(NCS2ErrorCode.INVALID_ARGUMENT, "Inputs require 1..32 nonempty finite f32 tensors, at most 16384 elements total") from error
         task_id = uuid.uuid4().hex
-        self._records[task_id] = _TaskRecord(self._models[model], tuple(snapshot))
+        self._records[task_id] = _TaskRecord(task_id, self._models[model], tuple(snapshot))
         self._queue.append(task_id)
+        self._submitted_tasks += 1
         if self._runner is None:
             self._runner = asyncio.create_task(self._drain(), name="ncs2-sdk-device-queue")
         return NCS2Task(self, task_id, model)
@@ -366,14 +446,50 @@ class NCS2Runtime:
         record.result, record.error = result, error
         record.status = (NCS2TaskStatus.CANCELLED if error and error.code == NCS2ErrorCode.TASK_CANCELLED
                          else NCS2TaskStatus.FAILED if error else NCS2TaskStatus.SUCCEEDED)
-        record.completed.set_result((result, error))
-        if error is not None and error.code != NCS2ErrorCode.TASK_CANCELLED:
-            self._last_error = NCS2SDKError(error.code, str(error))
+        if result is not None:
+            record.retained_elements = sum(len(output.data) for output in result.outputs)
+            self._retained_result_count += 1
+            self._retained_result_elements += record.retained_elements
+            self._terminal_order.append(record.task_id)
+            self._completed_tasks += 1
+        elif error is not None:
+            if error.code == NCS2ErrorCode.TASK_CANCELLED:
+                self._cancelled_tasks += 1
+            else:
+                self._failed_tasks += 1
+                self._last_error = NCS2SDKError(error.code, str(error))
+        record.completed.set_result(None)
+        self._enforce_retention()
+
+    def _enforce_retention(self):
+        while self._terminal_order:
+            over_results = (self._max_retained_results is not None and
+                            self._retained_result_count > self._max_retained_results)
+            over_elements = (self._max_retained_elements is not None and
+                             self._retained_result_elements > self._max_retained_elements)
+            if not over_results and not over_elements:
+                return
+            task_id = self._terminal_order.popleft()
+            record = self._records.get(task_id)
+            if record is None or record.result is None or record.retention_expired:
+                continue
+            record.result = None
+            record.retention_expired = True
+            self._retained_result_count -= 1
+            self._retained_result_elements -= record.retained_elements
+            record.retained_elements = 0
 
     def _release(self, task_id):
         record = self._record(task_id)
         if not record.completed.done():
             raise NCS2SDKError(NCS2ErrorCode.TASK_NOT_FINISHED, "Only terminal task handles can be released")
+        if record.result is not None:
+            self._retained_result_count -= 1
+            self._retained_result_elements -= record.retained_elements
+        try:
+            self._terminal_order.remove(task_id)
+        except ValueError:
+            pass
         del self._records[task_id]
         record.result, record.error = None, None
 
@@ -382,14 +498,22 @@ class NCS2Runtime:
             while self._queue:
                 record = self._records[self._queue.popleft()]
                 record.status = NCS2TaskStatus.RUNNING
+                started = time.perf_counter()
                 try:
                     value = await asyncio.to_thread(self._engine.execute, record.model, record.inputs)
+                    if value.inference_milliseconds is not None:
+                        self._last_inference_milliseconds = value.inference_milliseconds
+                        self._total_inference_milliseconds += value.inference_milliseconds
                     self._finish(record, result=value)
                 except NCS2SDKError as error:
                     # Drop worker-frame tracebacks; retained task errors contain no input buffers.
                     self._finish(record, error=NCS2SDKError(error.code, str(error)))
                 except Exception as error:
                     self._finish(record, error=NCS2SDKError(NCS2ErrorCode.PROTOCOL_ERROR, str(error)))
+                finally:
+                    elapsed_ms = (time.perf_counter() - started) * 1000
+                    self._last_task_milliseconds = elapsed_ms
+                    self._total_task_milliseconds += elapsed_ms
         finally:
             self._runner = None
 

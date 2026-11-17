@@ -28,6 +28,7 @@ class DoctorTests(unittest.TestCase):
             report = doctor.diagnose(root)
             self.assertFalse(report["ok"])
             self.assertIn("openvino.source", report["failed"])
+            self.assertIn("build:ncs2_model_inspect", report["failed"])
             self.assertIn("build:ncs2_worker", report["failed"])
             self.assertFalse(report["hardware_accessed"])
             self.assertIn("NEEDS ATTENTION", doctor.render(report))

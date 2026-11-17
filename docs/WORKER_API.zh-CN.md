@@ -2,7 +2,7 @@
 
 原生 arm64 C++ worker 持有锁定的 MYRIAD 运行时和已编译的计算图。Python 与 Swift 客户端通过管道交换 UTF-8 JSON-lines，不在自己的进程中加载 OpenVINO。这是本地 API，不是网络服务。
 
-需要异步模型和任务调度时，请使用[异步 SDK](ASYNC_SDK.zh-CN.md)。底层 wire protocol 保持不变。
+需要异步模型和任务调度时，请使用[异步 SDK](ASYNC_SDK.zh-CN.md)。协议保持版本化；schema 2 推理响应增加了原生 `infer_ms` 计时字段。
 
 ## 启动 worker
 
@@ -37,7 +37,9 @@ schema 2 推理使用一个 `inputs` 数组，每个对象对应 ready 描述符
 {"schema_version":2,"request_id":"a4","operation":"infer","inputs":[{"index":0,"dtype":"f32","shape":[1,4],"data":[1,2,3,4]}]}
 ```
 
-成功推理会返回请求身份、`hardware_executed:true`、输出 shape/dtype、耗时和输出数据。health 与 shutdown 会返回已完成推理计数。无效请求返回 `fatal:false` 的错误；运行时或设备失败属于 fatal，会终止 worker。
+成功推理会返回请求身份、`hardware_executed:true`、输出描述符和数据，以及 `infer_ms`。原生 worker 使用单调时钟测量 `start_async()` 到 `wait_for()` 的时间；该值不包含 JSON 编码和输出序列化。health 与 shutdown 会返回已完成推理计数。无效请求返回 `fatal:false` 的错误；运行时或设备失败属于 fatal，会终止 worker。
+
+schema 2 客户端兼容不带 `infer_ms` 的旧 worker 响应，此时不提供计时结果。
 
 帧大小最多 1 MiB，JSON 嵌套最多 8 层，单个张量最多 16,384 个元素。重复 key、无效 Unicode、未知字段、版本错误以及 shape/type 不匹配都会被拒绝。
 

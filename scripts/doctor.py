@@ -97,7 +97,7 @@ def diagnose(root: Path = ROOT, *, hardware: bool = False) -> dict:
     libusb_path = next((path for path in libusb_candidates if path.is_file()), None)
     results.append(binary_check("libusb.arm64", libusb_path))
 
-    for name in ("ncs2_openvino_probe", "ncs2_worker", "ncs2_multi_worker"):
+    for name in ("ncs2_openvino_probe", "ncs2_model_inspect", "ncs2_worker", "ncs2_multi_worker"):
         path = build / name
         results.append(check(f"build:{name}", path.is_file() and os.access(path, os.X_OK),
                              str(path.relative_to(root))))

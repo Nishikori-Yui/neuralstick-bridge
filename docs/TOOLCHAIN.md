@@ -41,7 +41,9 @@ This removes the x86_64 host dependency for the demonstrated inference path. It 
 
 ## Diagnostics
 
-`./ncs2 doctor` performs a read-only preflight without opening USB. It checks the native host, command-line tools, the pinned OpenVINO checkout, runtime libraries, firmware output hashes, expected build products, and the shared device-lock path. Runtime and libusb checks verify pure arm64 slices. `--json` emits one JSON report on stdout; log notices go to stderr. `./ncs2 doctor --hardware` additionally opens USB and asks MYRIAD for devices, without inference. Exit 0 means the selected checks passed; exit 2 means one or more required checks need attention.
+`./ncs2 doctor` performs a read-only preflight without opening USB. It checks the native host, command-line tools, the pinned OpenVINO checkout, runtime libraries, firmware output hashes, expected build products (including the offline model inspector), and the shared device-lock path. Runtime and libusb checks verify pure arm64 slices. `--json` emits one JSON report on stdout; log notices go to stderr. `./ncs2 doctor --hardware` additionally opens USB and asks MYRIAD for devices, without inference. Exit 0 means the selected checks passed; exit 2 means one or more required checks need attention.
+
+`./ncs2 capabilities --json` emits the supported model and worker contract without hardware access. `./ncs2 inspect --model MODEL.xml` reads model metadata offline and reports schema compatibility. The inspector links the pinned OpenVINO model reader but does not load the MYRIAD plugin, acquire the device lock or access USB. A compatible report checks structural limits; MYRIAD graph compilation still occurs at worker startup.
 
 The probe, schema-1 worker, schema-2 worker, and async SDK use the same nonblocking advisory lock. Set `NCS2_DEVICE_LOCK` to select an alternate lock file when coordinating multiple processes. A second NeuralStick Bridge process reports `device_busy` and does not start a MYRIAD session. `--validate-only` worker checks do not acquire the device lock.
 
@@ -55,4 +57,4 @@ USB access can differ between a sandboxed process and a normal macOS terminal. R
 
 ## Scope
 
-The public toolchain covers dependency bootstrap, native builds, USB descriptor reading, MYRIAD discovery, a deterministic ReLU smoke test and benchmark, schema-1 and schema-2 workers, Python/Swift clients, and architecture checks. Reproduction suites, soak tests, performance laboratories, lifecycle tracing, and application experiments are excluded from the supported public toolchain.
+The public toolchain covers dependency bootstrap, native builds, USB descriptor reading, MYRIAD discovery, offline IR inspection, the capability matrix, a deterministic ReLU smoke test and benchmark, schema-1 and schema-2 workers, Python/Swift clients, and architecture checks. Reproduction suites, soak tests, standalone performance laboratories, lifecycle tracing, and application experiments remain outside the default toolchain. Candidate workloads and measurement definitions are documented in `docs/PERFORMANCE_WORKLOADS.md`.

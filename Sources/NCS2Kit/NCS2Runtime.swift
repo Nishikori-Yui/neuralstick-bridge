@@ -26,6 +26,7 @@ public struct NCS2SDKError: Error, Sendable, Equatable, CustomStringConvertible 
         case taskCancelled = "task_cancelled"
         case taskNotFinished = "task_not_finished"
         case resultReleased = "result_released"
+        case resultExpired = "result_expired"
         case closed
     }
 
@@ -60,6 +61,24 @@ public struct NCS2RuntimeStatus: Sendable, Equatable {
     public let closed: Bool
     public let closing: Bool
     public let lastError: NCS2SDKError?
+    public let metrics: NCS2RuntimeMetrics
+    public let maxRetainedResults: Int?
+    public let maxRetainedElements: Int?
+}
+
+public struct NCS2RuntimeMetrics: Sendable, Equatable {
+    public let submittedTasks: Int
+    public let completedTasks: Int
+    public let failedTasks: Int
+    public let cancelledTasks: Int
+    public let workerStartCount: Int
+    public let modelSwitchCount: Int
+    public let lastTaskMilliseconds: Double?
+    public let totalTaskMilliseconds: Double
+    public let lastInferenceMilliseconds: Double?
+    public let totalInferenceMilliseconds: Double
+    public let retainedResultCount: Int
+    public let retainedResultElements: Int
 }
 
 /// A handle remains readable after runtime.close(); release() invalidates it.
@@ -101,6 +120,8 @@ private final class NCS2WorkerExecutor: @unchecked Sendable {
     private var lease: Int32 = -1
     private var session: Session?
     private var loadedModel: NCS2Model?
+    private var workerStartCount = 0
+    private var modelSwitchCount = 0
 
     init(worker: URL, multiWorker: URL, plugins: URL, timeout: TimeInterval,
          startupTimeout: TimeInterval, lock: URL) {
@@ -145,6 +166,18 @@ private final class NCS2WorkerExecutor: @unchecked Sendable {
         stateLock.lock()
         defer { stateLock.unlock() }
         return (loadedModel?.name, lease >= 0)
+    }
+
+    func metrics() -> (workerStartCount: Int, modelSwitchCount: Int) {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return (workerStartCount, modelSwitchCount)
+    }
+
+    private func currentModel() -> NCS2Model? {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return loadedModel
     }
 
     private func acquire() throws {
@@ -195,7 +228,8 @@ private final class NCS2WorkerExecutor: @unchecked Sendable {
     private func perform(model: NCS2Model, inputs: [[Float]]) throws -> NCS2TaskResult {
         dispatchPrecondition(condition: .onQueue(queue))
         try acquire()
-        if loadedModel != model {
+        if currentModel() != model {
+            let previousModel = currentModel()
             do { try closeSession() }
             catch { throw NCS2SDKError(.protocolError, "Previous worker shutdown failed: \(error)") }
             do {
@@ -211,6 +245,8 @@ private final class NCS2WorkerExecutor: @unchecked Sendable {
                 }
                 stateLock.lock()
                 loadedModel = model
+                workerStartCount += 1
+                if previousModel != nil { modelSwitchCount += 1 }
                 stateLock.unlock()
             } catch {
                 let description = String(describing: error)
@@ -242,7 +278,9 @@ private final class NCS2WorkerExecutor: @unchecked Sendable {
                         throw NCS2SDKError(.invalidArgument, "Input shape does not match the ready descriptor")
                     }
                 }
-                return NCS2TaskResult(model: model.name, outputs: try client.infer(inputs), inferenceMilliseconds: nil)
+                let outputs = try client.infer(inputs)
+                return NCS2TaskResult(model: model.name, outputs: outputs,
+                                      inferenceMilliseconds: client.lastInferenceMilliseconds)
             case nil: throw NCS2SDKError(.protocolError, "Worker session is missing")
             }
         } catch let error as NCS2SDKError {
@@ -268,6 +306,8 @@ public actor NCS2Runtime {
         var status = NCS2TaskStatus.queued
         var outcome: Result<NCS2TaskResult, NCS2SDKError>?
         var waiters = [UUID: CheckedContinuation<NCS2TaskResult, any Error>]()
+        var retentionExpired = false
+        var retainedElements = 0
     }
 
     private let executor: NCS2WorkerExecutor
@@ -280,15 +320,33 @@ public actor NCS2Runtime {
     private var closed = false
     private var cleanupFinished = false
     private var lastError: NCS2SDKError?
+    private let maxRetainedResults: Int?
+    private let maxRetainedElements: Int?
+    private var terminalOrder = [UUID]()
+    private var retainedResultCount = 0
+    private var retainedResultElements = 0
+    private var submittedTasks = 0
+    private var completedTasks = 0
+    private var failedTasks = 0
+    private var cancelledTasks = 0
+    private var lastTaskMilliseconds: Double?
+    private var totalTaskMilliseconds = 0.0
+    private var lastInferenceMilliseconds: Double?
+    private var totalInferenceMilliseconds = 0.0
 
     public init(worker: URL, multiWorker: URL, plugins: URL, queueCapacity: Int = 32,
-                timeout: TimeInterval = 15, startupTimeout: TimeInterval = 30, deviceLock: URL? = nil) throws {
+                timeout: TimeInterval = 15, startupTimeout: TimeInterval = 30, deviceLock: URL? = nil,
+                maxRetainedResults: Int? = nil, maxRetainedElements: Int? = nil) throws {
         guard (1...32).contains(queueCapacity),
               [timeout, startupTimeout].allSatisfy({ $0.isFinite && $0 > 0 && $0 <= 300 }),
+              maxRetainedResults.map({ (0...100_000).contains($0) }) ?? true,
+              maxRetainedElements.map({ (0...(Int.max / 2)).contains($0) }) ?? true,
               [worker, multiWorker, plugins].allSatisfy(\.isFileURL), deviceLock?.isFileURL != false else {
-            throw NCS2SDKError(.invalidArgument, "Require file URLs, queue capacity 1..32 and timeouts in (0,300]")
+            throw NCS2SDKError(.invalidArgument, "Require file URLs, queue capacity 1..32, timeouts in (0,300], and valid retention limits")
         }
         capacity = queueCapacity
+        self.maxRetainedResults = maxRetainedResults
+        self.maxRetainedElements = maxRetainedElements
         let lock = deviceLock ?? URL(fileURLWithPath: ProcessInfo.processInfo.environment["NCS2_DEVICE_LOCK"] ?? "/tmp/neuralstick-bridge-device-\(getuid()).lock")
         executor = NCS2WorkerExecutor(worker: worker, multiWorker: multiWorker, plugins: plugins,
                                       timeout: timeout, startupTimeout: startupTimeout, lock: lock)
@@ -310,6 +368,7 @@ public actor NCS2Runtime {
 
     public func status() async -> NCS2RuntimeStatus {
         let worker = executor.status()
+        let workerMetrics = executor.metrics()
         let running = records.first { $0.value.status == .running }
         return NCS2RuntimeStatus(
             queueDepth: pending.count,
@@ -320,7 +379,23 @@ public actor NCS2Runtime {
             registeredModelCount: models.count,
             closed: closed,
             closing: closing != nil && !cleanupFinished,
-            lastError: lastError
+            lastError: lastError,
+            metrics: NCS2RuntimeMetrics(
+                submittedTasks: submittedTasks,
+                completedTasks: completedTasks,
+                failedTasks: failedTasks,
+                cancelledTasks: cancelledTasks,
+                workerStartCount: workerMetrics.workerStartCount,
+                modelSwitchCount: workerMetrics.modelSwitchCount,
+                lastTaskMilliseconds: lastTaskMilliseconds,
+                totalTaskMilliseconds: totalTaskMilliseconds,
+                lastInferenceMilliseconds: lastInferenceMilliseconds,
+                totalInferenceMilliseconds: totalInferenceMilliseconds,
+                retainedResultCount: retainedResultCount,
+                retainedResultElements: retainedResultElements
+            ),
+            maxRetainedResults: maxRetainedResults,
+            maxRetainedElements: maxRetainedElements
         )
     }
 
@@ -341,6 +416,7 @@ public actor NCS2Runtime {
         let id = UUID()
         records[id] = Record(model: spec, inputs: inputs)
         pending.append(id)
+        submittedTasks += 1
         if runner == nil { runner = Task { await self.drain() } }
         return NCS2TaskHandle(id: id, model: model, runtime: self)
     }
@@ -357,6 +433,9 @@ public actor NCS2Runtime {
     fileprivate func result(for id: UUID) async throws -> NCS2TaskResult {
         try Task.checkCancellation()
         guard records[id] != nil else { throw NCS2SDKError(.resultReleased, "Task handle has been released") }
+        if records[id]?.retentionExpired == true {
+            throw NCS2SDKError(.resultExpired, "The result was evicted by the runtime retention policy")
+        }
         if let outcome = records[id]?.outcome { return try outcome.get() }
         let waiterID = UUID()
         return try await withTaskCancellationHandler {
@@ -384,7 +463,14 @@ public actor NCS2Runtime {
 
     fileprivate func release(for id: UUID) throws {
         guard let record = records[id] else { throw NCS2SDKError(.resultReleased, "Task handle has been released") }
-        guard record.outcome != nil else { throw NCS2SDKError(.taskNotFinished, "Only terminal task handles can be released") }
+        guard record.outcome != nil || record.retentionExpired else {
+            throw NCS2SDKError(.taskNotFinished, "Only terminal task handles can be released")
+        }
+        if !record.retentionExpired, case .success? = record.outcome {
+            retainedResultCount -= 1
+            retainedResultElements -= record.retainedElements
+        }
+        terminalOrder.removeAll { $0 == id }
         records.removeValue(forKey: id)
     }
 
@@ -393,15 +479,47 @@ public actor NCS2Runtime {
         record.inputs = []
         record.outcome = outcome
         switch outcome {
-        case .success: record.status = .succeeded
+        case .success(let result):
+            record.status = .succeeded
+            record.retainedElements = result.outputs.reduce(0) { $0 + $1.data.count }
+            retainedResultCount += 1
+            retainedResultElements += record.retainedElements
+            terminalOrder.append(id)
+            completedTasks += 1
         case .failure(let error):
             record.status = error.code == .taskCancelled ? .cancelled : .failed
-            if error.code != .taskCancelled { lastError = error }
+            if error.code == .taskCancelled { cancelledTasks += 1 }
+            else { failedTasks += 1; lastError = error }
         }
-        let waiters = record.waiters.values
+        let waiters = Array(record.waiters.values)
         record.waiters.removeAll()
         records[id] = record
-        for waiter in waiters { waiter.resume(with: outcome.mapError { $0 as any Error }) }
+        enforceRetention()
+        let delivered: Result<NCS2TaskResult, NCS2SDKError>
+        if records[id]?.retentionExpired == true {
+            delivered = .failure(NCS2SDKError(.resultExpired, "The result was evicted by the runtime retention policy"))
+        } else {
+            delivered = outcome
+        }
+        for waiter in waiters { waiter.resume(with: delivered.mapError { $0 as any Error }) }
+    }
+
+    private func enforceRetention() {
+        while let first = terminalOrder.first {
+            let overResults = maxRetainedResults.map { retainedResultCount > $0 } ?? false
+            let overElements = maxRetainedElements.map { retainedResultElements > $0 } ?? false
+            guard overResults || overElements else { return }
+            terminalOrder.removeFirst()
+            guard var record = records[first], case .success? = record.outcome,
+                  !record.retentionExpired else { continue }
+            let elements = record.retainedElements
+            record.outcome = nil
+            record.retentionExpired = true
+            record.retainedElements = 0
+            records[first] = record
+            retainedResultCount -= 1
+            retainedResultElements -= elements
+        }
     }
 
     private func drain() async {
@@ -412,7 +530,15 @@ public actor NCS2Runtime {
             let inputs = record.inputs
             record.inputs = []
             records[id] = record
+            let started = DispatchTime.now().uptimeNanoseconds
             let outcome = await executor.execute(model: record.model, inputs: inputs)
+            let elapsed = Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000
+            lastTaskMilliseconds = elapsed
+            totalTaskMilliseconds += elapsed
+            if case .success(let result) = outcome, let inference = result.inferenceMilliseconds {
+                lastInferenceMilliseconds = inference
+                totalInferenceMilliseconds += inference
+            }
             finish(id, outcome)
         }
         runner = nil

@@ -19,7 +19,7 @@ classifiers = [
 dev = ["jsonschema>=4.18"]
 
 [tool.setuptools]
-py-modules = ["ncs2_client", "ncs2_multi_client", "ncs2_async"]
+py-modules = ["ncs2_client", "ncs2_multi_client", "ncs2_async", "ncs2_model", "ncs2_capabilities"]
 packages = ["neuralstick_bridge"]
 
 [tool.setuptools.package-dir]

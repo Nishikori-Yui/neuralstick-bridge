@@ -39,6 +39,7 @@ for line in sys.stdin:
     response=dict(schema_version=schema,type='response',request_id=req['request_id'],status='ok',
                   case=model,completed=completed,hardware_executed=False)
     if req['operation']=='infer':
+        response['infer_ms']=.5
         values=req['input']['data'] if schema==1 else req['inputs'][0]['data']
         first=values[0]
         trace('infer',value=first)
@@ -65,11 +66,14 @@ for line in sys.stdin:
         }
     }
 
-    func runtime(capacity: Int = 32) throws -> NCS2Runtime {
+    func runtime(capacity: Int = 32, maxRetainedResults: Int? = nil,
+                 maxRetainedElements: Int? = nil) throws -> NCS2Runtime {
         let runtime = try NCS2Runtime(worker: root.appendingPathComponent("worker1"),
                                      multiWorker: root.appendingPathComponent("worker2"),
                                      plugins: root.appendingPathComponent("plugins.xml"), queueCapacity: capacity,
-                                     timeout: 3, startupTimeout: 3, deviceLock: root.appendingPathComponent("device.lock"))
+                                     timeout: 3, startupTimeout: 3, deviceLock: root.appendingPathComponent("device.lock"),
+                                     maxRetainedResults: maxRetainedResults,
+                                     maxRetainedElements: maxRetainedElements)
         runtimes.append(runtime)
         return runtime
     }
@@ -134,7 +138,7 @@ final class NCS2RuntimeTests: XCTestCase {
             for task in tasks { results.append(try await task.result()) }
             XCTAssertEqual(results.map { $0.outputs[0].data[0] }, [1,2,13,4])
             XCTAssertEqual(results[0].inferenceMilliseconds, 0.5)
-            XCTAssertNil(results[2].inferenceMilliseconds)
+            XCTAssertEqual(results[2].inferenceMilliseconds, 0.5)
             try await runtime.close()
             let rows = f.trace()
             XCTAssertEqual(rows.filter { $0["event"] as? String == "start" }.compactMap { $0["model"] as? String }, ["a","b","a"])
@@ -333,6 +337,70 @@ final class NCS2RuntimeTests: XCTestCase {
             XCTAssertFalse(state.closing)
             XCTAssertFalse(state.deviceOwned)
             XCTAssertEqual(state.lastError?.code, .inferenceFailed)
+        }
+    }
+
+    func testRuntimeMetricsAndResultRetention() async throws {
+        try await withFixture { f in
+            let runtime = try f.runtime(maxRetainedResults: 1, maxRetainedElements: 2)
+            try await f.register(runtime)
+            let first = try await runtime.submit(model: "a", inputs: [[1,2]])
+            _ = try await first.result()
+            let second = try await runtime.submit(model: "a", inputs: [[3,4]])
+            _ = try await second.result()
+            await self.expectCode(.resultExpired) { try await first.result() }
+            let result = try await second.result()
+            XCTAssertEqual(result.outputs[0].data, [3,4])
+            var state = await runtime.status()
+            XCTAssertEqual(state.metrics.submittedTasks, 2)
+            XCTAssertEqual(state.metrics.completedTasks, 2)
+            XCTAssertEqual(state.metrics.workerStartCount, 1)
+            XCTAssertEqual(state.metrics.modelSwitchCount, 0)
+            XCTAssertEqual(state.metrics.retainedResultCount, 1)
+            XCTAssertEqual(state.metrics.retainedResultElements, 2)
+            XCTAssertGreaterThan(state.metrics.totalTaskMilliseconds, 0)
+            try await first.release()
+            try await second.release()
+            state = await runtime.status()
+            XCTAssertEqual(state.metrics.retainedResultCount, 0)
+            XCTAssertEqual(state.metrics.retainedResultElements, 0)
+        }
+    }
+
+    func testModelInspectorAsyncAPIUsesOfflineProcess() async throws {
+        try await withFixture { f in
+            let payload: [String: Any] = [
+                "schema_version": 1,
+                "type": "model_inspection",
+                "hardware_accessed": false,
+                "openvino_version": "2022.3.2",
+                "model": [
+                    "xml": f.root.appendingPathComponent("relu.xml").path,
+                    "inputs": [["index": 0, "name": "input", "dtype": "f32", "static": true,
+                                "rank": 2, "shape": [1, 4], "elements": 4, "element_limit_ok": true]],
+                    "outputs": [["index": 0, "name": "output", "dtype": "f32", "static": true,
+                                 "rank": 2, "shape": [1, 4], "elements": 4, "element_limit_ok": true]],
+                    "input_count": 1,
+                    "output_count": 1,
+                ],
+                "compatibility": [
+                    "schema_1": ["compatible": true, "reasons": []],
+                    "schema_2": ["compatible": true, "reasons": []],
+                ],
+            ]
+            let data = try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .withoutEscapingSlashes
+            let jsonLiteral = String(decoding: try encoder.encode(String(decoding: data, as: UTF8.self)), as: UTF8.self)
+            let executable = f.root.appendingPathComponent("inspector")
+            try Data(("#!/usr/bin/env python3\nimport sys\nsys.stdout.write(" + jsonLiteral + ")\n").utf8).write(to: executable)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
+            let inspector = try NCS2ModelInspector(executable: executable)
+            let result = try await inspector.inspect(xml: f.root.appendingPathComponent("relu.xml"))
+            XCTAssertEqual(result.inputs.first?.shape, [1, 4])
+            XCTAssertTrue(result.schema1.compatible)
+            XCTAssertTrue(result.schema2.compatible)
+            XCTAssertFalse(result.hardwareAccessed)
         }
     }
 

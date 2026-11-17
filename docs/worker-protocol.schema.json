@@ -639,6 +639,7 @@
         "status",
         "case",
         "hardware_executed",
+        "infer_ms",
         "outputs"
       ],
       "properties": {
@@ -659,6 +660,10 @@
         },
         "hardware_executed": {
           "const": true
+        },
+        "infer_ms": {
+          "type": "number",
+          "minimum": 0
         },
         "outputs": {
           "type": "array",

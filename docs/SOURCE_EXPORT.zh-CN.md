@@ -9,13 +9,13 @@ python3 -B scripts/export_source.py --check dist/candidate
 
 ## 选择规则
 
-导出器使用显式白名单，覆盖命令入口、锁文件、Python 客户端、C++ worker 和 probe、构建/审计/导出脚本、核心测试、SwiftPM 文件和公开文档。缺少必要文件或源码目录时导出失败。
+导出器使用显式白名单，覆盖命令入口、锁文件、Python 客户端与模型检查/能力 API、C++ worker/probe/模型读取器、构建/审计/导出脚本、核心测试、SwiftPM 文件和公开文档。缺少必要文件或源码目录时导出失败。
 
 当前选择范围包括：
 
 - 根目录明确列出的文件，以及可选的 `LICENSE` 和 `ncs2*.cpp` / `ncs2*.hpp`；
 - `docs/`、`scripts/`、`python/tests/`、`python/neuralstick_bridge/`、`Sources/NCS2Kit/`、`Examples/` 和 `Tests/NCS2KitTests/` 的直接文件；协议 JSON 文件也包含在内，不扫描更深层目录；
-- `README.zh-CN.md` 与 `docs/*.zh-CN.md` 中文文档；
+- `README.zh-CN.md` 与 `docs/*.zh-CN.md` 中文文档，包含能力矩阵和无摄像头性能工作负载指南；
 - `.md`、`.json`、`.py`、`.sh`、`.cpp`、`.hpp` 、`.swift` 和 `.toml` 后缀。
 
 vendor 源码、构建产物、固件缓存、运行时二进制、results、原始 notebook、日志、缓存和未列出的嵌套源码目录都会被排除。

@@ -25,6 +25,8 @@ async def main():
         worker=Path("build-arm64/ncs2_worker"),
         multi_worker=Path("build-arm64/ncs2_multi_worker"),
         plugins=Path("vendor/openvino-2022.3/bin/arm64/Release/plugins.xml"),
+        max_retained_results=64,
+        max_retained_elements=65536,
     ) as runtime:
         await runtime.register_model("classifier", Path("models/classifier.xml"), schema=2)
         handle = await runtime.submit("classifier", [[0.0] * 128])
@@ -84,11 +86,13 @@ runtime actor 持有调度和结果状态；独立的串行 I/O executor 负责�
 
 `runtime.status()` 返回一个时间点快照，包括等待队列长度、运行中的任务和模型、已加载的 worker 模型、设备租约状态、已注册模型数量以及关闭状态。它不会访问 USB，也不会强制启动 worker。
 
+快照中的 `metrics` 包含提交、成功、失败和取消任务数，worker 启动数和模型切换数，最近及累计任务耗时，最近及累计原生推理耗时，以及保留结果数和元素数。任务耗时从 FIFO runner 开始执行该任务时计起，包含 worker 启动、模型读取/编译、协议处理和推理，不包含队列等待。推理耗时由原生 worker 在 `start_async()` 到 `wait_for()` 之间计时。
+
 默认容量是 **32 个等待任务**，不包含当前运行任务。队列满时立即返回 `queue_full`，不会保留被拒绝的任务。
 
 `cancel()` 只有在成功移除排队任务时返回 true。运行中或终态任务返回 false。取消 `result()` 的等待操作只解除当前等待者，不会终止硬件推理。
 
-结果和任务错误会一直保存在 runtime 内存中，直到调用 `release()`。终态任务才可以释放；释放后 handle 的访问会返回 `result_released`。及时释放不再需要的结果可以限制内存占用。
+结果和任务错误会一直保存在 runtime 内存中，直到调用 `release()`。`max_retained_results` 和 `max_retained_elements` 都是可选限制，默认不设上限。任一限制超出时，runtime 会从最早的成功任务结果开始淘汰，直到符合限制。任务仍处于终态，但 `result()` 会返回 `result_expired`；调用 `release()` 仍可释放句柄。限制只统计 runtime 持有的数据，不统计已经返回给应用代码的结果。请显式释放不再需要的句柄。
 
 `close()` 会拒绝新任务、取消排队任务、等待当前推理、关闭并回收 worker、释放设备租约。调用者取消 close 等待也不会放弃清理。已完成结果在 close 后仍可读取，直到显式释放。
 
@@ -109,13 +113,13 @@ SDK 在 `/tmp/neuralstick-bridge-device-UID.lock.sdk` 持有调度租约，直�
 | `protocol_error` | 坏帧、截断响应、传输超时或生命周期错误。 |
 | `inference_failed` | worker 返回推理错误；fatal 错误会回收 worker。 |
 | `unknown_model` / `model_exists` | 模型注册名称错误。 |
-| `task_cancelled` / `task_not_finished` / `result_released` | 任务句柄生命周期错误。 |
+| `task_cancelled` / `task_not_finished` / `result_released` / `result_expired` | 任务句柄生命周期、排队取消或结果被保留策略淘汰。 |
 | `closed` | runtime 已关闭。 |
 
-schema 1 才提供 worker 推理计时；schema 2 的计时字段为空。模型编译和队列等待不计入该字段。
+schema 1 和 schema 2 都提供 `inference_milliseconds` / `inferenceMilliseconds`，计时区间为 `start_async()` 到 `wait_for()`。队列等待、模型编译/切换、JSON 编码和输出序列化不计入该字段。现有 schema 2 客户端也能读取没有 `infer_ms` 的旧 worker 响应，此时计时字段为空。
 
 ## 兼容性
 
-worker 协议保持不变。已有同步 Python/Swift 客户端继续可用。Python 使用 `NCS2FatalError` 区分 fatal 响应，Swift 的 `NCS2ClientError` 提供 `isFatalResponse`，不需要解析厂商错误文本。
+worker schema 版本仍为 1 和 2。schema 2 推理响应新增 `infer_ms`；客户端兼容缺少该字段的旧 schema 2 响应。已有同步 Python/Swift 客户端继续可用。Python 使用 `NCS2FatalError` 区分 fatal 响应，Swift 的 `NCS2ClientError` 提供 `isFatalResponse`，不需要解析厂商错误文本。
 
 状态快照中的 `last_error`（Python）或 `lastError`（Swift）保留最近一次任务失败，排队取消不计入。释放任务结果不会清除该诊断。`device_owned` / `deviceOwned` 表示 SDK 调度租约；硬件锁由 native worker 持有。快照反映进程内状态，不是实时 USB 健康探测。

@@ -411,6 +411,7 @@
         "status": "ok",
         "case": "fixture",
         "hardware_executed": true,
+        "infer_ms": 1.25,
         "outputs": [
           {
             "index": 0,

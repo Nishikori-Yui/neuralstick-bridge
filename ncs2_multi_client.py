@@ -182,6 +182,12 @@ class NCS2MultiWorker:
             if response.get("case") != self.case or response.get("hardware_executed") is not True:
                 self._terminate()
                 raise NCS2WorkerError("Invalid multi-worker response metadata")
+            inference_ms = response.get("infer_ms")
+            if (inference_ms is not None and
+                    (type(inference_ms) not in (int, float) or not _finite_number(inference_ms)
+                     or inference_ms < 0)):
+                self._terminate()
+                raise NCS2WorkerError("Invalid multi-worker inference timer")
             if not isinstance(outputs, list) or len(outputs) != len(self.outputs):
                 self._terminate()
                 raise NCS2WorkerError("Invalid output tensor array")
